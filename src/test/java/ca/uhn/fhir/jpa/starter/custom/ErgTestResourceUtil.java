@@ -4,7 +4,13 @@ import ca.uhn.fhir.context.FhirContext;
 import org.hl7.fhir.r4.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Base64;
 import java.util.Calendar;
@@ -577,33 +583,41 @@ public class ErgTestResourceUtil {
 
         // Content Slicing (mustSupport=true für Slicing)
         // Constraint RechnungOderAnhang: Entweder 'anhang' ODER ('rechnungspdf' UND 'strukturierterRechnungsinhalt')
+        try {
+            // Generiere PDF aus der Invoice
+            byte[] pdfData = createPdfFromInvoice(invoice);
 
-        // Slice: rechnungspdf (min=0, max=1, mustSupport=true)
-        DocumentReference.DocumentReferenceContentComponent pdfContent = docRef.addContent();
-        pdfContent.getAttachment()
-            .setContentType("application/pdf") // patternCode, mustSupport=true
-            .setData(encodeToBase64("DUMMY-PDF-CONTENT-ERG-DOCREF".getBytes())); // data min=1, mustSupport=true
-        // .setUrl("Binary/example-pdf"); // Alternative, wenn als Binary gespeichert
-        pdfContent.setFormat(new Coding() // format min=1, mustSupport=true
-            .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs")
-            .setCode("erechnung")); // patternCoding
+            // Slice: rechnungspdf (min=0, max=1, mustSupport=true)
+            DocumentReference.DocumentReferenceContentComponent pdfContent = docRef.addContent();
+            pdfContent.getAttachment()
+                .setContentType("application/pdf") // patternCode, mustSupport=true
+                .setData(pdfData); // Setze die generierten PDF-Daten
+            // .setUrl("Binary/example-pdf"); // Alternative, wenn als Binary gespeichert
+            pdfContent.setFormat(new Coding() // format min=1, mustSupport=true
+                .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs")
+                .setCode("erechnung")); // patternCoding
 
-        // Slice: strukturierterRechnungsinhalt (min=0, max=1, mustSupport=true)
-        DocumentReference.DocumentReferenceContentComponent structuredContent = docRef.addContent();
-        // Invoice in JSON oder XML umwandeln
-        String invoiceString;
-        // Entscheide dich für ein Format (z.B. JSON)
-        invoiceString = FhirContext.forR4().newJsonParser().setPrettyPrint(true).encodeResourceToString(invoice);
-        String contentType = "application/fhir+json";
+            // Slice: strukturierterRechnungsinhalt (min=0, max=1, mustSupport=true)
+            DocumentReference.DocumentReferenceContentComponent structuredContent = docRef.addContent();
+            // Invoice in JSON oder XML umwandeln
+            String invoiceString;
+            // Entscheide dich für ein Format (z.B. JSON)
+            invoiceString = FhirContext.forR4().newJsonParser().setPrettyPrint(true).encodeResourceToString(invoice);
+            String contentType = "application/fhir+json";
 
-        structuredContent.getAttachment()
-            .setContentType(contentType) // mime-type, mustSupport=true (aus ValueSet)
-            .setData(encodeToBase64(invoiceString.getBytes())); // data min=1, mustSupport=true
-        // .setUrl("Binary/example-invoice-json"); // Alternative
-        structuredContent.setFormat(new Coding() // format min=1, mustSupport=true
-            .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs")
-            .setCode("rechnungsinhalt")); // patternCoding
+            structuredContent.getAttachment()
+                .setContentType(contentType) // mime-type, mustSupport=true (aus ValueSet)
+                .setData(encodeToBase64(invoiceString.getBytes())); // data min=1, mustSupport=true
+            // .setUrl("Binary/example-invoice-json"); // Alternative
+            structuredContent.setFormat(new Coding() // format min=1, mustSupport=true
+                .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs")
+                .setCode("rechnungsinhalt")); // patternCoding
 
+        } catch (IOException e) {
+            logger.error("Fehler beim Erstellen oder Einbetten der PDF in DocumentReference: {}", e.getMessage(), e);
+            // Füge hier ggf. Fehlerbehandlung hinzu, z.B. Dummy-Daten setzen oder Exception werfen
+            throw new RuntimeException("Konnte PDF für DocumentReference nicht erstellen", e);
+        }
         // Context (mustSupport=true)
         DocumentReference.DocumentReferenceContextComponent context = new DocumentReference.DocumentReferenceContextComponent();
         docRef.setContext(context);
@@ -682,5 +696,147 @@ public class ErgTestResourceUtil {
         leistungsartExt.setValue(new Coding("http://beispiel.de/fhir/CodeSystem/leistungsarten", "Privatabrechnung", "Privatabrechnung"));
 
         return docRef;
+    }
+
+    /**
+     * Erstellt eine PDF-Darstellung einer Invoice.
+     * @param invoice Die Invoice, aus der das PDF erstellt werden soll.
+     * @return Ein Byte-Array, das das PDF repräsentiert.
+     * @throws IOException Wenn ein Fehler beim Erstellen des PDFs auftritt.
+     */
+    public static byte[] createPdfFromInvoice(Invoice invoice) throws IOException {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+                // Schriftart und -größe setzen
+                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12);
+                float yPosition = page.getMediaBox().getHeight() - 50;
+                float margin = 50;
+
+                // Titel
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Rechnung");
+                contentStream.endText();
+                yPosition -= 30;
+
+                // Rechnungsnummer
+                contentStream.setFont(PDType1Font.HELVETICA, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Rechnungsnummer: " + (invoice.hasIdentifier() ? invoice.getIdentifierFirstRep().getValue() : "N/A"));
+                contentStream.endText();
+                yPosition -= 20;
+
+                // Datum
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Datum: " + (invoice.hasDate() ? new SimpleDateFormat("dd.MM.yyyy").format(invoice.getDate()) : "N/A"));
+                contentStream.endText();
+                yPosition -= 30;
+
+                // Leistungserbringer
+                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Leistungserbringer:");
+                contentStream.endText();
+                yPosition -= 15;
+
+                contentStream.setFont(PDType1Font.HELVETICA, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText(invoice.hasIssuer() ? invoice.getIssuer().getDisplay() : "N/A");
+                contentStream.endText();
+                yPosition -= 30;
+
+                // Patient
+                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Patient:");
+                contentStream.endText();
+                yPosition -= 15;
+
+                contentStream.setFont(PDType1Font.HELVETICA, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText(invoice.hasRecipient() ? invoice.getRecipient().getDisplay() : "N/A");
+                contentStream.endText();
+                yPosition -= 30;
+
+                // Beträge
+                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText("Beträge:");
+                contentStream.endText();
+                yPosition -= 15;
+
+                contentStream.setFont(PDType1Font.HELVETICA, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText(String.format("Nettobetrag: %.2f EUR", invoice.hasTotalNet() ? invoice.getTotalNet().getValue().doubleValue() : 0.0));
+                contentStream.endText();
+                yPosition -= 15;
+
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText(String.format("Bruttobetrag: %.2f EUR", invoice.hasTotalGross() ? invoice.getTotalGross().getValue().doubleValue() : 0.0));
+                contentStream.endText();
+                yPosition -= 30;
+
+                // Zahlungsziel
+                contentStream.setFont(PDType1Font.HELVETICA, 10);
+                contentStream.beginText();
+                contentStream.newLineAtOffset(margin, yPosition);
+                contentStream.showText(invoice.hasPaymentTerms() ? invoice.getPaymentTerms() : "Kein Zahlungsziel angegeben");
+                contentStream.endText();
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            document.save(baos);
+            return baos.toByteArray();
+        }
+    }
+
+    /**
+     * Erstellt eine Test-DocumentReference für einen Anhang.
+     * @param patient Der Patient, auf den sich der Anhang bezieht.
+     * @return DocumentReference mit Anhang.
+     */
+    public static DocumentReference createTestAnhang(Patient patient) {
+        DocumentReference anhang = new DocumentReference();
+        anhang.setStatus(Enumerations.DocumentReferenceStatus.CURRENT);
+
+        // Type mit KDL Coding
+        CodeableConcept type = new CodeableConcept();
+        type.addCoding()
+            .setSystem("http://dvmd.de/fhir/CodeSystem/kdl")
+            .setCode("PT130102")
+            .setDisplay("Molekularpathologiebefund");
+        anhang.setType(type);
+
+        // Beschreibung
+        anhang.setDescription("Molekularpathologiebefund vom 31.12.21");
+
+        // Subject (Patient)
+        if (patient != null && patient.hasIdElement()) {
+             anhang.setSubject(new Reference(patient.getIdElement().toUnqualifiedVersionless()));
+        } else {
+             // Fallback, falls Patient nicht vorhanden oder keine ID hat
+             anhang.setSubject(new Reference().setDisplay("Unbekannter Patient"));
+        }
+
+
+        // PDF Content (Dummy)
+        DocumentReference.DocumentReferenceContentComponent content = anhang.addContent();
+        content.getAttachment()
+            .setContentType("application/pdf")
+            .setData(encodeToBase64("DIESISTNUREINBEISPIELDIESISTKEINVALIDESPDF00".getBytes()));
+
+        return anhang;
     }
 } 
