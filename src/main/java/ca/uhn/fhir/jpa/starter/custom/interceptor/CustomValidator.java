@@ -29,11 +29,6 @@ import java.util.List;
 @Interceptor
 public class CustomValidator {
     private static final Logger logger = LoggerFactory.getLogger(CustomValidator.class);
-    private static final Pattern KVID_PATTERN = Pattern.compile("^[A-Z][0-9]{9}$");
-    private static final Pattern GOAE_PATTERN = Pattern.compile("^[A-Z]?\\d{1,4}[A-Z]?$");
-    private static final Pattern GOZ_PATTERN = Pattern.compile("^\\d{3,4}[a-z]?$");
-    private static final String GOAE_SYSTEM = "http://fhir.de/CodeSystem/bäk/goä";
-    private static final String GOZ_SYSTEM = "http://fhir.de/CodeSystem/bzäk/goz";
     private final FhirValidator validator;
     private final ValidationSupportChain validationSupportChain;
     private final PrePopulatedValidationSupport prePopulatedSupport;
@@ -91,6 +86,7 @@ public class CustomValidator {
     public void validateResourceCreate(IBaseResource resource) {
         logger.error("====== HOOK CALLED: STORAGE_PRECOMMIT_RESOURCE_CREATED for {} ======", resource.fhirType());
         validateAndThrowIfInvalid(resource);
+		  //validator.validateWithResult(resource);
     }
 
     @Hook(Pointcut.STORAGE_PRECOMMIT_RESOURCE_UPDATED)
@@ -100,26 +96,6 @@ public class CustomValidator {
 
     public void validateAndThrowIfInvalid(IBaseResource resource) {
         logger.debug("Validiere Resource vom Typ: {}", resource.getClass().getSimpleName());
-        
-        // Zusätzliche KVID-Validierung für Patienten
-        if (resource instanceof Patient) {
-            validateKVID((Patient) resource);
-        }
-        
-        // Zusätzliche Validierung für DocumentReference
-        if (resource instanceof DocumentReference) {
-            validateDocumentReference((DocumentReference) resource);
-        }
-        
-        // Zusätzliche Validierung für Parameters
-        if (resource instanceof Parameters) {
-            validateParameters((Parameters) resource);
-        }
-
-        // Neue Validierung für Invoice (Gebührenordnungen)
-        if (resource instanceof Invoice) {
-            validateInvoiceGebOrd((Invoice) resource);
-        }
         
         ValidationResult validationResult = validator.validateWithResult(resource);
         
@@ -170,212 +146,6 @@ public class CustomValidator {
         logger.debug("Resource erfolgreich validiert (oder nur Warnungen/Informationen gefunden)");
     }
 
-    private void validateKVID(Patient patient) {
-        patient.getIdentifier().stream()
-            .filter(id -> "http://fhir.de/sid/gkv/kvid-10".equals(id.getSystem()))
-            .forEach(kvid -> {
-                String value = kvid.getValue();
-                if (value == null || !KVID_PATTERN.matcher(value).matches()) {
-                    OperationOutcome outcome = new OperationOutcome();
-                    outcome.addIssue()
-                        .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                        .setCode(OperationOutcome.IssueType.INVALID)
-                        .setDiagnostics("KVID muss 10-stellig sein und mit einem Großbuchstaben beginnen, gefolgt von 9 Ziffern. Gefundener Wert: " + value);
-                    
-                    throw new UnprocessableEntityException("Ungültiges KVID-Format", outcome);
-                }
-            });
-    }
-
-    private void validateDocumentReference(DocumentReference resource) {
-        OperationOutcome outcome = new OperationOutcome();
-        boolean hasError = false;
-
-        // Validiere Status
-        if (resource.getStatus() == null) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.REQUIRED)
-                .setDiagnostics("Validierungsfehler: Pflichtfeld Status fehlt");
-            hasError = true;
-        }
-
-        // Validiere Type
-        if (resource.getType() == null) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.REQUIRED)
-                .setDiagnostics("Validierungsfehler: Pflichtfeld Typ fehlt");
-            hasError = true;
-        }
-
-        // Validiere Subject (Patient)
-        if (resource.getSubject() == null || resource.getSubject().isEmpty()) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.REQUIRED)
-                .setDiagnostics("Validierungsfehler: Pflichtfeld Patientenreferenz (subject) fehlt");
-            hasError = true;
-        }
-
-        // Validiere Content
-        if (resource.getContent().isEmpty()) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.REQUIRED)
-                .setDiagnostics("Validierungsfehler: Pflichtfeld Inhalt (content) fehlt");
-            hasError = true;
-        } else {
-            // Validiere Attachments in Content
-            for (DocumentReference.DocumentReferenceContentComponent content : resource.getContent()) {
-                if (content.getAttachment() == null || content.getAttachment().isEmpty()) {
-                    outcome.addIssue()
-                        .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                        .setCode(OperationOutcome.IssueType.REQUIRED)
-                        .setDiagnostics("Validierungsfehler: Pflichtfeld Attachment fehlt im Content");
-                    hasError = true;
-                }
-            }
-        }
-
-        if (hasError) {
-            throw new UnprocessableEntityException("Validierungsfehler: Pflichtfelder fehlen", outcome);
-        }
-    }
-
-    private void validateParameters(Parameters parameters) {
-        OperationOutcome outcome = new OperationOutcome();
-        boolean hasError = false;
-
-        // Validiere Pflichtparameter für die Submit-Operation
-        boolean hasRechnung = false;
-        boolean hasModus = false;
-        boolean hasAngereichertesPDF = false;
-
-        for (Parameters.ParametersParameterComponent param : parameters.getParameter()) {
-            switch (param.getName()) {
-                case "rechnung":
-                    hasRechnung = true;
-                    if (param.getResource() instanceof DocumentReference) {
-                        try {
-                            validateDocumentReference((DocumentReference) param.getResource());
-                        } catch (UnprocessableEntityException e) {
-                            outcome.addIssue()
-                                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                                .setCode(OperationOutcome.IssueType.INVALID)
-                                .setDiagnostics("Fehler in der Rechnung: " + e.getMessage());
-                            hasError = true;
-                        }
-                    }
-                    break;
-                case "modus":
-                    hasModus = true;
-                    if (param.getValue() instanceof CodeType) {
-                        CodeType modus = (CodeType) param.getValue();
-                        if (!"normal".equals(modus.getValue()) && !"test".equals(modus.getValue())) {
-                            outcome.addIssue()
-                                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                                .setCode(OperationOutcome.IssueType.INVALID)
-                                .setDiagnostics("Der Modus muss 'normal' oder 'test' sein");
-                            hasError = true;
-                        }
-                    } else {
-                        outcome.addIssue()
-                            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                            .setCode(OperationOutcome.IssueType.INVALID)
-                            .setDiagnostics("Der Parameter 'modus' muss vom Typ CodeType sein");
-                        hasError = true;
-                    }
-                    break;
-                case "angereichertesPDF":
-                    hasAngereichertesPDF = true;
-                    break;
-            }
-        }
-
-        if (!hasRechnung) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.INVALID)
-                .setDiagnostics("Der Parameter 'rechnung' muss angegeben werden");
-            hasError = true;
-        }
-        if (!hasModus) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.INVALID)
-                .setDiagnostics("Der Parameter 'modus' muss angegeben werden");
-            hasError = true;
-        }
-        if (!hasAngereichertesPDF) {
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.INVALID)
-                .setDiagnostics("Der Parameter 'angereichertesPDF' muss angegeben werden");
-            hasError = true;
-        }
-
-        if (hasError) {
-            throw new UnprocessableEntityException("Validierungsfehler in den Parametern", outcome);
-        }
-    }
-
-    private void validateInvoiceGebOrd(Invoice invoice) {
-        OperationOutcome outcome = new OperationOutcome();
-        boolean hasError = false;
-
-        // Prüfe Rechnungspositionen
-        for (Invoice.InvoiceLineItemComponent lineItem : invoice.getLineItem()) {
-            if (lineItem.hasChargeItemReference()) {
-                try {
-                    IBaseResource chargeItem = lineItem.getChargeItemReference().getResource();
-                    if (chargeItem instanceof ChargeItem) {
-                        ChargeItem charge = (ChargeItem) chargeItem;
-                        
-                        // Prüfe nur das Format der Gebührenordnungspositionen
-                        if (charge.getCode() != null && charge.getCode().getCoding() != null) {
-                            for (Coding coding : charge.getCode().getCoding()) {
-                                String system = coding.getSystem();
-                                String code = coding.getCode();
-                                
-                                if (system != null && code != null) {
-                                    // Validiere Format der GOÄ Positionen
-                                    if (GOAE_SYSTEM.equals(system) && !GOAE_PATTERN.matcher(code).matches()) {
-                                        outcome.addIssue()
-                                            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                                            .setCode(OperationOutcome.IssueType.INVALID)
-                                            .setDiagnostics("Ungültiges Format der GOÄ-Position: " + code + 
-                                                ". Format muss sein: Optional Buchstabe, 1-4 Ziffern, optional Buchstabe");
-                                        hasError = true;
-                                    }
-                                    // Validiere Format der GOZ Positionen
-                                    else if (GOZ_SYSTEM.equals(system) && !GOZ_PATTERN.matcher(code).matches()) {
-                                        outcome.addIssue()
-                                            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                                            .setCode(OperationOutcome.IssueType.INVALID)
-                                            .setDiagnostics("Ungültiges Format der GOZ-Position: " + code + 
-                                                ". Format muss sein: 3-4 Ziffern, optional Kleinbuchstabe");
-                                        hasError = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.error("Fehler bei der Validierung der Gebührenordnungsposition: {}", e.getMessage());
-                    outcome.addIssue()
-                        .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                        .setCode(OperationOutcome.IssueType.INVALID)
-                        .setDiagnostics("Fehler bei der Validierung der Gebührenordnungsposition: " + e.getMessage());
-                    hasError = true;
-                }
-            }
-        }
-
-        if (hasError) {
-            throw new UnprocessableEntityException("Validierungsfehler in den Gebührenordnungspositionen", outcome);
-        }
-    }
 
     public FhirValidator getValidator() {
         logger.debug("Validator wird abgerufen");
