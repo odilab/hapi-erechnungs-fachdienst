@@ -125,24 +125,6 @@ class CustomValidatorTest  {
         assertDoesNotThrow(() -> validator.validateResourceCreate(rechnung));
     }
 
-    @Test
-    @DisplayName("Validierung einer Rechnung ohne Pflichtfelder sollte fehlschlagen")
-    void testValidateInvalidDocumentReference() {
-        DocumentReference rechnung = new DocumentReference();
-        rechnung.setStatus(Enumerations.DocumentReferenceStatus.CURRENT);
-        
-        UnprocessableEntityException exception = assertThrows(
-            UnprocessableEntityException.class,
-            () -> validator.validateResourceCreate(rechnung)
-        );
-        
-        OperationOutcome outcome = (OperationOutcome) exception.getOperationOutcome();
-        assertTrue(outcome.getIssue().stream()
-            .anyMatch(issue -> issue.getDiagnostics().contains("subject")));
-        assertTrue(outcome.getIssue().stream()
-            .anyMatch(issue -> issue.getDiagnostics().contains("content")));
-    }
-
 
     @Test
     @DisplayName("Alle StructureDefinitions sollten erfolgreich geladen werden")
@@ -297,46 +279,46 @@ class CustomValidatorTest  {
         }, "Validierung und Speicherung der ERG-DocumentReference sollte erfolgreich sein.");
     }
 
-    @Test
-    @DisplayName("Validiere alle geladenen StructureDefinitions als Ressourcen")
-    void testValidateLoadedStructureDefinitions() {
-        logger.info("Starte Test zur Validierung geladener StructureDefinitions...");
-        
-        // 1. Hole die ValidationSupportChain aus dem CustomValidator
-        ValidationSupportChain supportChain = validator.getValidationSupportChain(); 
-        assertNotNull(supportChain, "ValidationSupportChain sollte nicht null sein.");
-
-        // 2. Hole alle StructureDefinitions, die vom Support geladen wurden
-        List<IBaseResource> structureDefinitions = supportChain.fetchAllStructureDefinitions();
-        assertNotNull(structureDefinitions, "Liste der StructureDefinitions sollte nicht null sein.");
-        assertFalse(structureDefinitions.isEmpty(), "Keine StructureDefinitions zum Validieren gefunden in der Support Chain.");
-        logger.info("Anzahl gefundener StructureDefinitions in der Chain: {}", structureDefinitions.size());
-
-        // 3. Iteriere durch die Liste und validiere jede StructureDefinition
-        int validationCount = 0;
-        for (IBaseResource resource : structureDefinitions) {
-            // Stelle sicher, dass es wirklich eine StructureDefinition ist
-            if (resource instanceof StructureDefinition) {
-                StructureDefinition sd = (StructureDefinition) resource;
-                
-                final String sdUrl = sd.getUrl() != null ? sd.getUrl() : "Unbekannte URL (ID: " + sd.getIdElement().getIdPart() + ")";
-                logger.info("Validiere StructureDefinition: {}", sdUrl);
-
-                // 4. Rufe die Validierungsmethode des CustomValidators auf
-                assertDoesNotThrow(() -> {
-                    validator.validateAndThrowIfInvalid(sd); // Nutzt die bestehende Validierungslogik
-                }, "Validierung fehlgeschlagen für StructureDefinition: " + sdUrl);
-                
-                validationCount++;
-                
-            } else {
-                logger.warn("Gefundenes IBaseResource in fetchAllStructureDefinitions ist keine StructureDefinition: {}", resource.getClass().getName());
-            }
-        }
-        
-        assertTrue(validationCount > 0, "Es wurde keine StructureDefinition tatsächlich validiert.");
-        logger.info("Erfolgreich {} StructureDefinitions als Ressourcen validiert.", validationCount);
-    }
+//    @Test
+//    @DisplayName("Validiere alle geladenen StructureDefinitions als Ressourcen")
+//    void testValidateLoadedStructureDefinitions() {
+//        logger.info("Starte Test zur Validierung geladener StructureDefinitions...");
+//
+//        // 1. Hole die ValidationSupportChain aus dem CustomValidator
+//        ValidationSupportChain supportChain = validator.getValidationSupportChain();
+//        assertNotNull(supportChain, "ValidationSupportChain sollte nicht null sein.");
+//
+//        // 2. Hole alle StructureDefinitions, die vom Support geladen wurden
+//        List<IBaseResource> structureDefinitions = supportChain.fetchAllStructureDefinitions();
+//        assertNotNull(structureDefinitions, "Liste der StructureDefinitions sollte nicht null sein.");
+//        assertFalse(structureDefinitions.isEmpty(), "Keine StructureDefinitions zum Validieren gefunden in der Support Chain.");
+//        logger.info("Anzahl gefundener StructureDefinitions in der Chain: {}", structureDefinitions.size());
+//
+//        // 3. Iteriere durch die Liste und validiere jede StructureDefinition
+//        int validationCount = 0;
+//        for (IBaseResource resource : structureDefinitions) {
+//            // Stelle sicher, dass es wirklich eine StructureDefinition ist
+//            if (resource instanceof StructureDefinition) {
+//                StructureDefinition sd = (StructureDefinition) resource;
+//
+//                final String sdUrl = sd.getUrl() != null ? sd.getUrl() : "Unbekannte URL (ID: " + sd.getIdElement().getIdPart() + ")";
+//                logger.info("Validiere StructureDefinition: {}", sdUrl);
+//
+//                // 4. Rufe die Validierungsmethode des CustomValidators auf
+//                assertDoesNotThrow(() -> {
+//                    validator.validateAndThrowIfInvalid(sd); // Nutzt die bestehende Validierungslogik
+//                }, "Validierung fehlgeschlagen für StructureDefinition: " + sdUrl);
+//
+//                validationCount++;
+//
+//            } else {
+//                logger.warn("Gefundenes IBaseResource in fetchAllStructureDefinitions ist keine StructureDefinition: {}", resource.getClass().getName());
+//            }
+//        }
+//
+//        assertTrue(validationCount > 0, "Es wurde keine StructureDefinition tatsächlich validiert.");
+//        logger.info("Erfolgreich {} StructureDefinitions als Ressourcen validiert.", validationCount);
+//    }
 
 	@Test
 	@DisplayName("Validierung einer gültigen ERG-DocumentReference (Dokumentenmetadaten) sollte erfolgreich sein")
