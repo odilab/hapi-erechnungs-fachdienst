@@ -6,6 +6,7 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
 import ca.uhn.fhir.jpa.starter.custom.operation.submit.TokenGenerationService;
+import ca.uhn.fhir.jpa.starter.custom.operation.submit.PdfEnrichmentService;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.CodeType;
 import org.hl7.fhir.r4.model.OperationOutcome;
@@ -17,6 +18,7 @@ import ca.uhn.fhir.validation.ValidationResult;
 import ca.uhn.fhir.validation.ResultSeverityEnum;
 import ca.uhn.fhir.validation.SingleValidationMessage;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import org.hl7.fhir.r4.model.*;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import java.io.IOException;
 
 @Component
 public class RechnungValidator {
@@ -37,6 +41,7 @@ public class RechnungValidator {
     private final CustomValidator customValidator;
     private final DaoRegistry daoRegistry;
     private final TokenGenerationService tokenGenerationService;
+    private final PdfEnrichmentService pdfEnrichmentService;
     private final FhirContext ctx;
 
     /**
@@ -53,10 +58,11 @@ public class RechnungValidator {
     }
 
     @Autowired
-    public RechnungValidator(CustomValidator customValidator, DaoRegistry daoRegistry, TokenGenerationService tokenGenerationService, FhirContext ctx) {
+    public RechnungValidator(CustomValidator customValidator, DaoRegistry daoRegistry, TokenGenerationService tokenGenerationService, PdfEnrichmentService pdfEnrichmentService, FhirContext ctx) {
         this.customValidator = customValidator;
         this.daoRegistry = daoRegistry;
         this.tokenGenerationService = tokenGenerationService;
+        this.pdfEnrichmentService = pdfEnrichmentService;
         this.ctx = ctx;
     }
 
@@ -76,6 +82,7 @@ public class RechnungValidator {
         DocumentReference finalTransformedRechnung = null;
         List<SingleValidationMessage> allWarningsAndInfos = new ArrayList<>();
         Map<Integer, String> invoiceUrlMap = new HashMap<>();
+        Map<Integer, byte[]> pdfDataToEnrichMap = new HashMap<>();
 
         if (rechnung == null) {
             LOGGER.warn("validate wurde mit einer null DocumentReference aufgerufen.");
@@ -91,7 +98,7 @@ public class RechnungValidator {
         ValidationResult docRefValidationResult = customValidator.validateAndReturnResult(rechnung);
         handleValidationResult(docRefValidationResult, allWarningsAndInfos, "DocumentReference");
 
-        // 2. Extrahiere, parse, validiere (und speichere ggf.) Invoices aus Attachments
+        // 2. Extrahiere, parse, validiere (und speichere ggf.) Invoices und sammle PDFs
         if (rechnung.hasContent()) {
             for (int i = 0; i < rechnung.getContent().size(); i++) {
                 DocumentReference.DocumentReferenceContentComponent content = rechnung.getContent().get(i);
@@ -100,6 +107,7 @@ public class RechnungValidator {
                     String contentType = attachment.getContentType();
                     boolean isFhirJson = "application/fhir+json".equalsIgnoreCase(contentType);
                     boolean isFhirXml = "application/fhir+xml".equalsIgnoreCase(contentType);
+                    boolean isPdf = "application/pdf".equalsIgnoreCase(contentType);
 
                     if (isFhirJson || isFhirXml) {
                         LOGGER.debug("Found potential FHIR Invoice in content index {} with contentType: {}", i, contentType);
@@ -129,11 +137,11 @@ public class RechnungValidator {
                                              invoiceUrlMap.put(i, invoiceUrl); // Index und URL merken
                                          } else {
                                              LOGGER.error("Speichern der Invoice aus Index {} hat kein 'created=true' zurückgegeben. Outcome: {}", i, savedInvoiceOutcome);
-                                             throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Konnte die extrahierte Invoice nicht speichern.");
+                                             throw new InternalErrorException("Konnte die extrahierte Invoice nicht speichern.");
                                          }
                                     } catch (Exception eSave) {
                                         LOGGER.error("Fehler beim Speichern der Invoice aus Content-Index {}.", i, eSave);
-                                        throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Fehler beim Speichern der extrahierten Invoice: " + eSave.getMessage(), eSave);
+                                        throw new InternalErrorException("Fehler beim Speichern der extrahierten Invoice: " + eSave.getMessage(), eSave);
                                     }
                                 }
                             } else {
@@ -147,6 +155,19 @@ public class RechnungValidator {
                         } catch (Exception eParse) {
                             LOGGER.error("Fehler beim Parsen der FHIR-Ressource aus Content-Index {}. ContentType: {}.", i, contentType, eParse);
                             throw new UnprocessableEntityException("FHIR-Parsing-Fehler in Attachment bei Index " + i + ": " + eParse.getMessage());
+                        }
+                    } else if (isPdf) {
+                        LOGGER.debug("Found PDF Attachment in content index {}", i);
+                        byte[] pdfData = attachment.getData();
+                        try (PDDocument ignored = PDDocument.load(pdfData)) {
+                            // Erfolgreich geladen, also wahrscheinlich eine valide PDF
+                            LOGGER.debug("PDF in content index {} scheint valide zu sein.", i);
+                            if ("normal".equalsIgnoreCase(modusValue)) {
+                                pdfDataToEnrichMap.put(i, pdfData); // Für spätere Anreicherung merken
+                            }
+                        } catch (IOException ePdfLoad) {
+                            LOGGER.error("Fehler beim Laden/Validieren der PDF aus Content-Index {}. Ist es eine valide PDF?", i, ePdfLoad);
+                            throw new UnprocessableEntityException("Anhang bei Index " + i + " ist keine valide PDF: " + ePdfLoad.getMessage());
                         }
                     }
                 }
@@ -165,7 +186,7 @@ public class RechnungValidator {
                     DocumentReference savedRechnung = (DocumentReference) docRefOutcome.getResource();
                      if (savedRechnung == null) {
                         LOGGER.error("Konnte die gespeicherte initiale DocumentReference nicht vom DaoMethodOutcome abrufen.");
-                        throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Fehler nach dem Speichern der Rechnung: Gespeicherte Ressource nicht verfügbar.");
+                        throw new InternalErrorException("Fehler nach dem Speichern der Rechnung: Gespeicherte Ressource nicht verfügbar.");
                     }
 
                     // Erstelle Kopie für die Transformation
@@ -198,7 +219,52 @@ public class RechnungValidator {
                     // Generiere eindeutige ID für die transformierte Rechnung
                     String generatedTokenId = tokenGenerationService.generateUniqueToken();
                     transformedRechnung.setId(generatedTokenId);
-                    LOGGER.info("Generierte eindeutige ID für transformierte Rechnung: {}", generatedTokenId);
+                    LOGGER.info("Generierte eindeutige ID für transformierte Rechnung (und PDF QR-Codes): {}", generatedTokenId);
+
+                    // PDFs anreichern, als Binary speichern und URLs in transformedRechnung eintragen
+                    Map<Integer, String> storedPdfBinaryUrlMap = new HashMap<>();
+                    if (!pdfDataToEnrichMap.isEmpty()) {
+                        LOGGER.debug("Verarbeite {} PDFs für Anreicherung und Speicherung.", pdfDataToEnrichMap.size());
+                        for (Map.Entry<Integer, byte[]> pdfEntry : pdfDataToEnrichMap.entrySet()) {
+                            int pdfContentIndex = pdfEntry.getKey();
+                            byte[] rawPdfData = pdfEntry.getValue();
+                            try {
+                                LOGGER.info("Reichere PDF aus Content-Index {} mit Token {} an und speichere als Binary.", pdfContentIndex, generatedTokenId);
+                                // savedRechnung wird für PdfEnrichmentService.extractStructuredData verwendet, falls es eine Invoice einbetten soll
+                                Binary enrichedPdfBinary = pdfEnrichmentService.enrichPdfWithBarcodeAndAttachment(rawPdfData, generatedTokenId, savedRechnung);
+                                
+                                DaoMethodOutcome savedBinaryOutcome = daoRegistry.getResourceDao(Binary.class).create(enrichedPdfBinary);
+                                if (savedBinaryOutcome.getCreated() != null && savedBinaryOutcome.getCreated()) {
+                                    String pdfBinaryUrl = savedBinaryOutcome.getId().toUnqualifiedVersionless().getValue();
+                                    LOGGER.info("Angereicherte PDF (aus Index {}) als Binary gespeichert mit URL: {}", pdfContentIndex, pdfBinaryUrl);
+                                    storedPdfBinaryUrlMap.put(pdfContentIndex, pdfBinaryUrl);
+                                } else {
+                                    LOGGER.error("Speichern der angereicherten PDF (aus Index {}) als Binary schlug fehl.", pdfContentIndex);
+                                    throw new InternalErrorException("Konnte angereicherte PDF nicht als Binary speichern (Index " + pdfContentIndex + ").");
+                                }
+                            } catch (Exception eEnrichOrSave) {
+                                LOGGER.error("Fehler bei PDF-Anreicherung/Speicherung für Index {}.", pdfContentIndex, eEnrichOrSave);
+                                throw new InternalErrorException("Fehler bei PDF-Verarbeitung (Index " + pdfContentIndex + "): " + eEnrichOrSave.getMessage(), eEnrichOrSave);
+                            }
+                        }
+                    }
+
+                    // URLs der gespeicherten, angereicherten PDFs in transformedRechnung eintragen
+                    if (!storedPdfBinaryUrlMap.isEmpty()) {
+                        LOGGER.debug("Aktualisiere transformierte Rechnung mit URLs der gespeicherten PDFs für Indizes: {}", storedPdfBinaryUrlMap.keySet());
+                        for (Map.Entry<Integer, String> entry : storedPdfBinaryUrlMap.entrySet()) {
+                            int contentIndex = entry.getKey();
+                            String pdfUrl = entry.getValue();
+                            if (contentIndex < transformedRechnung.getContent().size()) {
+                                Attachment attachmentToModify = transformedRechnung.getContent().get(contentIndex).getAttachment();
+                                attachmentToModify.setData(null); 
+                                attachmentToModify.setUrl(pdfUrl); 
+                                LOGGER.debug("Content-Index {} in transformierter Rechnung (PDF): data entfernt, url '{}' gesetzt.", contentIndex, pdfUrl);
+                            } else {
+                                LOGGER.error("Interner Fehler: PDF Content-Index {} ist außerhalb der Grenzen.", contentIndex);
+                            }
+                        }
+                    }
 
                     // Speichere die transformierte DocumentReference via UPDATE
                     LOGGER.info("Speichere transformierte DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId);
@@ -209,11 +275,11 @@ public class RechnungValidator {
                              finalTransformedRechnung = transformedRechnung; // Für Rückgabe speichern
                         } else {
                             LOGGER.warn("Speichern/Update der transformierten DocumentReference war nicht erfolgreich oder gab unerwartetes Ergebnis zurück. Outcome: {}", transformedDocRefOutcome);
-                            throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Fehler beim Update der transformierten Rechnung: Unerwartetes Ergebnis vom DAO.");
+                            throw new InternalErrorException("Fehler beim Update der transformierten Rechnung: Unerwartetes Ergebnis vom DAO.");
                         }
                     } catch (Exception eTrans) {
                          LOGGER.error("Fehler beim Speichern/Update der transformierten DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId, eTrans);
-                         throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Fehler beim Speichern/Update der transformierten Rechnung: " + eTrans.getMessage(), eTrans);
+                         throw new InternalErrorException("Fehler beim Speichern/Update der transformierten Rechnung: " + eTrans.getMessage(), eTrans);
                     }
 
                 } else {
@@ -221,7 +287,7 @@ public class RechnungValidator {
                 }
             } catch (Exception e) {
                 LOGGER.error("Fehler beim Speichern der initialen DocumentReference (Rechnung) in der Datenbank.", e);
-                throw new ca.uhn.fhir.rest.server.exceptions.InternalErrorException("Fehler beim Speichern der Rechnung: " + e.getMessage(), e);
+                throw new InternalErrorException("Fehler beim Speichern der Rechnung: " + e.getMessage(), e);
             }
         } else {
             LOGGER.info("Modus 'test': Nur Validierung durchgeführt, kein Speichern oder Transformieren.");
