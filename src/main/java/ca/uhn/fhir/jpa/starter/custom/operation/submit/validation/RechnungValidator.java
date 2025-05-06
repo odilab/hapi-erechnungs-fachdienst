@@ -129,16 +129,16 @@ public class RechnungValidator {
                                 // Speichere Invoice nur im Normal-Modus (nach erfolgreicher Validierung)
                                 if ("normal".equalsIgnoreCase(modusValue)) {
                                     try {
-                                         LOGGER.info("Modus 'normal': Speichere Invoice aus Content-Index {} in der Datenbank.", i);
-                                         DaoMethodOutcome savedInvoiceOutcome = daoRegistry.getResourceDao(Invoice.class).create(parsedInvoice);
-                                         if (savedInvoiceOutcome.getCreated() != null && savedInvoiceOutcome.getCreated()) {
-                                             String invoiceUrl = savedInvoiceOutcome.getId().toUnqualifiedVersionless().getValue();
-                                             LOGGER.info("Invoice erfolgreich gespeichert mit ID/URL: {}", invoiceUrl);
-                                             invoiceUrlMap.put(i, invoiceUrl); // Index und URL merken
-                                         } else {
-                                             LOGGER.error("Speichern der Invoice aus Index {} hat kein 'created=true' zurückgegeben. Outcome: {}", i, savedInvoiceOutcome);
-                                             throw new InternalErrorException("Konnte die extrahierte Invoice nicht speichern.");
-                                         }
+                                        LOGGER.info("Modus 'normal': Speichere Invoice aus Content-Index {} in der Datenbank.", i);
+                                        DaoMethodOutcome savedInvoiceOutcome = daoRegistry.getResourceDao(Invoice.class).create(parsedInvoice);
+                                        if (savedInvoiceOutcome.getCreated() != null && savedInvoiceOutcome.getCreated()) {
+                                            String invoiceUrl = savedInvoiceOutcome.getId().toUnqualifiedVersionless().getValue();
+                                            LOGGER.info("Invoice erfolgreich gespeichert mit ID/URL: {}", invoiceUrl);
+                                            invoiceUrlMap.put(i, invoiceUrl); // Index und URL merken
+                                        } else {
+                                            LOGGER.error("Speichern der Invoice aus Index {} hat kein 'created=true' zurückgegeben. Outcome: {}", i, savedInvoiceOutcome);
+                                            throw new InternalErrorException("Konnte die extrahierte Invoice nicht speichern.");
+                                        }
                                     } catch (Exception eSave) {
                                         LOGGER.error("Fehler beim Speichern der Invoice aus Content-Index {}.", i, eSave);
                                         throw new InternalErrorException("Fehler beim Speichern der extrahierten Invoice: " + eSave.getMessage(), eSave);
@@ -184,7 +184,7 @@ public class RechnungValidator {
                     String originalDocRefId = docRefOutcome.getId().getValue();
                     LOGGER.info("Initiale DocumentReference erfolgreich gespeichert mit ID: {}", originalDocRefId);
                     DocumentReference savedRechnung = (DocumentReference) docRefOutcome.getResource();
-                     if (savedRechnung == null) {
+                      if (savedRechnung == null) {
                         LOGGER.error("Konnte die gespeicherte initiale DocumentReference nicht vom DaoMethodOutcome abrufen.");
                         throw new InternalErrorException("Fehler nach dem Speichern der Rechnung: Gespeicherte Ressource nicht verfügbar.");
                     }
@@ -195,19 +195,19 @@ public class RechnungValidator {
 
                     // --> Modifiziere die transformierte Rechnung basierend auf gespeicherten Invoices
                     if (!invoiceUrlMap.isEmpty()) {
-                         LOGGER.debug("Modifiziere transformierte Rechnung: Ersetze Daten durch URLs für Indizes: {}", invoiceUrlMap.keySet());
-                         for (Map.Entry<Integer, String> entry : invoiceUrlMap.entrySet()) {
-                             int contentIndex = entry.getKey();
-                             String invoiceUrl = entry.getValue();
-                             if (contentIndex < transformedRechnung.getContent().size()) {
-                                 Attachment attachmentToModify = transformedRechnung.getContent().get(contentIndex).getAttachment();
-                                 attachmentToModify.setData(null); // Daten entfernen
-                                 attachmentToModify.setUrl(invoiceUrl); // URL setzen
-                                 LOGGER.debug("Content-Index {} in transformierter Rechnung: data entfernt, url '{}' gesetzt.", contentIndex, invoiceUrl);
-                             } else {
-                                  LOGGER.error("Interner Fehler: Content-Index {} aus invoiceUrlMap ist außerhalb der Grenzen der transformierten Rechnung (size {}). Überspringe.", contentIndex, transformedRechnung.getContent().size());
-                             }
-                         }
+                        LOGGER.debug("Modifiziere transformierte Rechnung: Ersetze Daten durch URLs für Indizes: {}", invoiceUrlMap.keySet());
+                        for (Map.Entry<Integer, String> entry : invoiceUrlMap.entrySet()) {
+                            int contentIndex = entry.getKey();
+                            String invoiceUrl = entry.getValue();
+                            if (contentIndex < transformedRechnung.getContent().size()) {
+                                Attachment attachmentToModify = transformedRechnung.getContent().get(contentIndex).getAttachment();
+                                attachmentToModify.setData(null); // Daten entfernen
+                                attachmentToModify.setUrl(invoiceUrl); // URL setzen
+                                LOGGER.debug("Content-Index {} in transformierter Rechnung: data entfernt, url '{}' gesetzt.", contentIndex, invoiceUrl);
+                            } else {
+                                LOGGER.error("Interner Fehler: Content-Index {} aus invoiceUrlMap ist außerhalb der Grenzen der transformierten Rechnung (size {}). Überspringe.", contentIndex, transformedRechnung.getContent().size());
+                            }
+                        }
                     }
                     
                     // Füge relatesTo hinzu
@@ -271,19 +271,19 @@ public class RechnungValidator {
                     try {
                         DaoMethodOutcome transformedDocRefOutcome = daoRegistry.getResourceDao(DocumentReference.class).update(transformedRechnung);
                         if (transformedDocRefOutcome.getId() != null && generatedTokenId.equals(transformedDocRefOutcome.getId().getIdPart())) {
-                             LOGGER.info("Transformierte DocumentReference erfolgreich mit ID {} aktualisiert/gespeichert.", transformedDocRefOutcome.getId().getValue());
-                             finalTransformedRechnung = transformedRechnung; // Für Rückgabe speichern
+                            LOGGER.info("Transformierte DocumentReference erfolgreich mit ID {} aktualisiert/gespeichert.", transformedDocRefOutcome.getId().getValue());
+                            finalTransformedRechnung = transformedRechnung; // Für Rückgabe speichern
                         } else {
                             LOGGER.warn("Speichern/Update der transformierten DocumentReference war nicht erfolgreich oder gab unerwartetes Ergebnis zurück. Outcome: {}", transformedDocRefOutcome);
                             throw new InternalErrorException("Fehler beim Update der transformierten Rechnung: Unerwartetes Ergebnis vom DAO.");
                         }
                     } catch (Exception eTrans) {
-                         LOGGER.error("Fehler beim Speichern/Update der transformierten DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId, eTrans);
-                         throw new InternalErrorException("Fehler beim Speichern/Update der transformierten Rechnung: " + eTrans.getMessage(), eTrans);
+                        LOGGER.error("Fehler beim Speichern/Update der transformierten DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId, eTrans);
+                        throw new InternalErrorException("Fehler beim Speichern/Update der transformierten Rechnung: " + eTrans.getMessage(), eTrans);
                     }
 
                 } else {
-                     LOGGER.warn("Speichern der initialen DocumentReference hat kein 'created=true' zurückgegeben. Outcome: {}", docRefOutcome);
+                    LOGGER.warn("Speichern der initialen DocumentReference hat kein 'created=true' zurückgegeben. Outcome: {}", docRefOutcome);
                 }
             } catch (Exception e) {
                 LOGGER.error("Fehler beim Speichern der initialen DocumentReference (Rechnung) in der Datenbank.", e);
