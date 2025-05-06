@@ -146,6 +146,23 @@ public class CustomValidator {
         logger.debug("Resource erfolgreich validiert (oder nur Warnungen/Informationen gefunden)");
     }
 
+    /**
+     * Führt die Validierung durch und gibt das vollständige Ergebnis zurück.
+     *
+     * @param resource Die zu validierende Ressource.
+     * @return Das ValidationResult mit allen Meldungen (FATAL, ERROR, WARNING, INFORMATION).
+     */
+    public ValidationResult validateAndReturnResult(IBaseResource resource) {
+        logger.debug("Führe Validierung durch und gebe Ergebnis zurück für Ressource vom Typ: {}", resource.getClass().getSimpleName());
+        ValidationResult validationResult = validator.validateWithResult(resource);
+        // Logging der Ergebnisse kann hier optional wiederholt oder angepasst werden
+        if (validationResult.isSuccessful()) {
+            logger.debug("Validierung erfolgreich (keine Fehler oder Fatals). Anzahl Meldungen: {}", validationResult.getMessages().size());
+        } else {
+            logger.warn("Validierung nicht erfolgreich (Fehler oder Fatals gefunden). Anzahl Meldungen: {}", validationResult.getMessages().size());
+        }
+        return validationResult;
+    }
 
     public FhirValidator getValidator() {
         logger.debug("Validator wird abgerufen");
