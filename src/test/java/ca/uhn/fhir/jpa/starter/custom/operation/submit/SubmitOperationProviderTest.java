@@ -9,6 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -216,11 +221,56 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         DocumentReference.DocumentReferenceContentComponent transformedContent = transformedDocRef.getContentFirstRep();
         assertTrue(originalContent.hasAttachment() && transformedContent.hasAttachment(), "Beide sollten einen Attachment im Content haben.");
         assertEquals(originalContent.getAttachment().getContentType(), transformedContent.getAttachment().getContentType(), "Attachment ContentType sollte übereinstimmen.");
-        // Vorsicht beim Datenvergleich - kann groß sein. Nur auf Existenz prüfen?
-        assertTrue(originalContent.getAttachment().hasData() && transformedContent.getAttachment().hasData(), "Beide Attachments sollten Daten enthalten.");
-        assertArrayEquals(originalContent.getAttachment().getData(), transformedContent.getAttachment().getData(), "Attachment Daten sollten übereinstimmen.");
+        
+        // --- Angepasste Prüfung für Daten und URL --- 
+        // Das Original MUSS Daten haben
+        assertTrue(originalContent.getAttachment().hasData(), "Das originale Attachment sollte Daten enthalten.");
+        // Das Transformierte darf KEINE Daten mehr haben, sondern eine URL
+        assertFalse(transformedContent.getAttachment().hasData(), "Das transformierte Attachment sollte KEINE Daten mehr enthalten.");
+        assertTrue(transformedContent.getAttachment().hasUrl(), "Das transformierte Attachment sollte eine URL enthalten.");
+        assertNotNull(transformedContent.getAttachment().getUrl(), "Die URL im transformierten Attachment darf nicht null sein.");
+        String binaryUrl = transformedContent.getAttachment().getUrl(); // Hole die URL
+        LOGGER.info("Prüfung von Attachment data/url erfolgreich: Original hat data, Transformierte hat url ({})", binaryUrl);
 
-        // Weitere Felder könnten hier nach Bedarf verglichen werden (z.B. author, custodian, context...)
+        // --- Hole die Binary Ressource und speichere die PDF --- 
+        LOGGER.info("Versuche Binary Ressource von URL {} zu laden...", binaryUrl);
+        Binary fetchedBinary = null;
+        try {
+             fetchedBinary = client.read()
+                                    .resource(Binary.class) // Typ ist Binary
+                                    .withUrl(binaryUrl) // Verwende die URL aus dem Attachment
+                                    .withAdditionalHeader("Authorization", authHeader)
+                                    .execute();
+            assertNotNull(fetchedBinary, "Die Binary Ressource konnte nicht von der URL geladen werden: " + binaryUrl);
+            assertTrue(fetchedBinary.hasData(), "Die geladene Binary Ressource sollte Daten enthalten.");
+
+            byte[] pdfBytes = fetchedBinary.getData();
+            assertNotNull(pdfBytes, "Die Daten der Binary Ressource dürfen nicht null sein.");
+            assertTrue(pdfBytes.length > 0, "Die Daten der Binary Ressource dürfen nicht leer sein.");
+            LOGGER.info("Binary Ressource erfolgreich geladen, enthält {} Bytes.", pdfBytes.length);
+
+            // Definiere Zielpfad und Dateiname
+            Path outputDir = Paths.get("src", "test", "resources", "output");
+            Path outputFile = outputDir.resolve("enriched_rechnung_normal_mode.pdf");
+
+            // Erstelle Verzeichnis, falls nicht vorhanden
+            Files.createDirectories(outputDir);
+
+            // Schreibe die Bytes in die Datei (überschreibt bestehende Datei)
+            Files.write(outputFile, pdfBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            LOGGER.info("Die angereicherte PDF wurde erfolgreich in {} gespeichert.", outputFile.toAbsolutePath());
+
+        } catch (IOException ioException) {
+            LOGGER.error("Fehler beim Schreiben der PDF-Datei nach {}: {}", "src/test/resources/output/enriched_rechnung_normal_mode.pdf", ioException.getMessage(), ioException);
+            fail("Konnte die PDF-Datei nicht schreiben: " + ioException.getMessage());
+        } catch (Exception e) {
+             LOGGER.error("Fehler beim Laden oder Verarbeiten der Binary/PDF von URL {}: {}", binaryUrl, e.getMessage(), e);
+             fail("Fehler beim Laden oder Verarbeiten der Binary/PDF von URL " + binaryUrl, e);
+        }
+        // --- Ende PDF Speichern ---
+        
+        // assertArrayEquals ist nicht mehr sinnvoll, da transformed keine Daten hat
+        // assertArrayEquals(originalContent.getAttachment().getData(), transformedContent.getAttachment().getData(), "Attachment Daten sollten übereinstimmen.");
 
         LOGGER.info("Vergleich zwischen originaler und transformierter Rechnung erfolgreich abgeschlossen.");
     }
