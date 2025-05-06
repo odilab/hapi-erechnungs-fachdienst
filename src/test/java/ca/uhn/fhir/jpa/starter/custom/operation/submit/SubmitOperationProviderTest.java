@@ -154,6 +154,11 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         DocumentReference transformedDocRef = (DocumentReference) transformedParam.getResource();
         LOGGER.info("TransformedRechnung-Parameter gefunden mit ID: {}", transformedDocRef.hasId() ? transformedDocRef.getIdElement().getValue() : "KEINE ID (Fehler!)");
 
+        // Gib die transformierte Rechnung zur Überprüfung in der Konsole aus
+        String transformedJson = ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(transformedDocRef);
+        LOGGER.info("--- Inhalt der zurückgegebenen transformedRechnung: ---\n{}", transformedJson);
+        LOGGER.info("--- Ende transformedRechnung --- ");
+
         // Zusätzliche Prüfungen für die transformierte Rechnung
         assertTrue(transformedDocRef.hasId(), "Die transformierte Rechnung muss eine ID haben.");
         assertTrue(transformedDocRef.hasRelatesTo(), "Die transformierte Rechnung muss ein relatesTo-Element haben.");
