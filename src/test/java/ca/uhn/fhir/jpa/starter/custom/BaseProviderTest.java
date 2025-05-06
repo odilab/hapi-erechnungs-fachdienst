@@ -38,8 +38,9 @@ import static ca.uhn.fhir.jpa.starter.custom.ErgTestResourceUtil.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = {
     Application.class, 
 }, properties = {
-    "hapi.fhir.custom-bean-packages=ca.uhn.fhir.jpa.starter.custom.interceptor",
+    //"hapi.fhir.custom-bean-packages=ca.uhn.fhir.jpa.starter.custom.interceptor,ca.uhn.fhir.jpa.starter.custom.operation",
     "hapi.fhir.custom-interceptor-classes=ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AuthenticationInterceptor,ca.uhn.fhir.jpa.starter.custom.interceptor.auth.ResourceAuthorizationInterceptor",
+    "hapi.fhir.custom-provider-classes=ca.uhn.fhir.jpa.starter.custom.operation.submit.SubmitOperationProvider",
     "spring.datasource.url=jdbc:h2:mem:dbr4",
     "hapi.fhir.cr_enabled=false",
     "hapi.fhir.fhir_version=r4",
@@ -122,14 +123,10 @@ public abstract class BaseProviderTest {
             // 1. Erstelle ChargeItem
             testChargeItem = createMinimalChargeItem(testPatient);
             LOGGER.debug("Test ChargeItem erstellt.");
-            // Optional: Speichern für ID
-            // testChargeItem = (ChargeItem) client.create().resource(testChargeItem).execute().getResource();
 
             // 2. Erstelle Invoice
             testInvoice = createValidErgInvoice(testPatient, testPractitioner, testInstitution, testChargeItem);
             LOGGER.debug("Test Invoice erstellt.");
-            // Optional: Speichern für ID
-            // testInvoice = (Invoice) client.create().resource(testInvoice).execute().getResource();
 
             // 3. Erstelle Anhang DocumentReference
             testAnhangDocRef = createTestAnhang(testPatient);
@@ -159,7 +156,7 @@ public abstract class BaseProviderTest {
     }
 
     /**
-     * Speichert/Aktualisiert die Basis-Testressourcen (Patient, Practitioner, Institution) auf dem FHIR-Server.
+     * Speichert die Basis-Testressourcen (Patient, Practitioner, Institution) auf dem FHIR-Server.
      * Stellt sicher, dass die Member-Variablen die vom Server zugewiesenen IDs enthalten.
      */
     protected void saveBaseResourcesToServer() {
@@ -167,15 +164,27 @@ public abstract class BaseProviderTest {
         try {
             // Verwende update statt create für Idempotenz. Funktioniert auch, wenn die Ressource noch nicht existiert.
             if (testPatient != null) {
-                testPatient = (Patient) client.update().resource(testPatient).execute().getResource();
+                testPatient = (Patient) client.create()
+                .resource(testPatient)
+                .withAdditionalHeader("Authorization", "Bearer " + getValidAccessToken("EGK1"))
+                .execute()
+                .getResource();
                 LOGGER.debug("Patient gespeichert/aktualisiert mit ID: {}", testPatient.getId());
             }
             if (testPractitioner != null) {
-                testPractitioner = (Practitioner) client.update().resource(testPractitioner).execute().getResource();
+                testPractitioner = (Practitioner) client.create()
+                .resource(testPractitioner)
+                .withAdditionalHeader("Authorization", "Bearer " + getValidAccessToken("HBA_ARZT"))
+                .execute()
+                .getResource();
                 LOGGER.debug("Practitioner gespeichert/aktualisiert mit ID: {}", testPractitioner.getId());
             }
             if (testInstitution != null) {
-                testInstitution = (Organization) client.update().resource(testInstitution).execute().getResource();
+                testInstitution = (Organization) client.create()
+                .resource(testInstitution)
+                .withAdditionalHeader("Authorization", "Bearer " + getValidAccessToken("SMCB_KRANKENHAUS"))
+                .execute()
+                .getResource();
                 LOGGER.debug("Institution gespeichert/aktualisiert mit ID: {}", testInstitution.getId());
             }
             LOGGER.info("Basis-Testressourcen erfolgreich auf dem Server gespeichert/aktualisiert.");
