@@ -30,6 +30,7 @@ public class ErgTestResourceUtil {
     public static Patient createTestErgPatient() {
         Patient patient = new Patient();
 
+        //patient.setId("X114428530");
         // Meta mit Profil URL setzen (inkl. Version)
         Meta meta = new Meta();
         meta.addProfile("https://gematik.de/fhir/erg/StructureDefinition/erg-patient|1.1.0-RC1");
@@ -50,7 +51,7 @@ public class ErgTestResourceUtil {
             .setCode("KVZ10");
         kvnr.setType(kvnrType);
         kvnr.setSystem("http://fhir.de/sid/gkv/kvid-10");
-        kvnr.setValue("A123456789"); // Beispiel KVNR
+        kvnr.setValue("X114428530"); // Beispiel KVNR
 
         // Assigner für KVNR (IKNR der Krankenkasse) - mustSupport=true
         Identifier iknr = new Identifier();
@@ -67,14 +68,14 @@ public class ErgTestResourceUtil {
         // Name - mustSupport=true
         HumanName name = patient.addName();
         name.setUse(HumanName.NameUse.OFFICIAL);
-        name.setText("Frau Dr. Erika Mustermann"); // mustSupport=true
-        name.setFamily("Mustermann"); // mustSupport=true
+        name.setText("Juna"); // mustSupport=true
+        name.setFamily("Fuchs"); // mustSupport=true
         // mustSupport Extensions für Family Name hinzufügen
         name.getFamilyElement().addExtension("http://fhir.de/StructureDefinition/humanname-namenszusatz", new StringType("geb. Beispiel")); // namenszusatz
-        name.getFamilyElement().addExtension("http://hl7.org/fhir/StructureDefinition/humanname-own-name", new StringType("Mustermann")); // nachname
+        name.getFamilyElement().addExtension("http://hl7.org/fhir/StructureDefinition/humanname-own-name", new StringType("Fuchs")); // nachname
         name.getFamilyElement().addExtension("http://fhir.de/StructureDefinition/humanname-vorsatzwort", new StringType("von")); // vorsatzwort (Korrigierte URL)
 
-        name.addGiven("Erika"); // mustSupport=true
+        name.addGiven("Juna"); // mustSupport=true
         name.addPrefix("Dr."); // mustSupport=true
         // mustSupport Extension für Prefix hinzufügen
         if (!name.getPrefix().isEmpty()) {
@@ -110,7 +111,7 @@ public class ErgTestResourceUtil {
      */
     public static Practitioner createTestErgPractitioner() {
         Practitioner practitioner = new Practitioner();
-        practitioner.setId("erg-practitioner-example");
+        //practitioner.setId("1-HBA-Testkarte-883110000129083");
         practitioner.setMeta(new Meta().addProfile("https://gematik.de/fhir/erg/StructureDefinition/erg-person|1.1.0-RC1"));
 
         // Narrative hinzufügen (dom-6 Constraint)
@@ -125,18 +126,18 @@ public class ErgTestResourceUtil {
             .setType(new CodeableConcept().addCoding(
                 new Coding("http://terminology.hl7.org/CodeSystem/v2-0203", "PRN", null)))
             .setSystem("https://gematik.de/fhir/sid/telematik-id")
-            .setValue("3-8831200001234567890-31");
+            .setValue("1-HBA-Testkarte-883110000129083");
 
         // Name
         HumanName name = practitioner.addName();
         name.setUse(HumanName.NameUse.OFFICIAL);
-        name.setFamily("Schneider");
+        name.setFamily("MaiÞer");
         // Korrekte Extension für Namenszusatz (Adelstitel)
         name.getFamilyElement().addExtension("http://fhir.de/StructureDefinition/humanname-namenszusatz", new StringType("von"));
         // Korrekte Extension für Vorsatzwort (akademischer Titel)
         name.getFamilyElement().addExtension("http://hl7.org/fhir/StructureDefinition/humanname-own-prefix", new StringType("Prof"));
 
-        name.addGiven("Peter");
+        name.addGiven("Roland");
         name.addPrefix("Dr. med.");
 
         // Telecom: Telefonnummer
@@ -168,7 +169,7 @@ public class ErgTestResourceUtil {
      */
     public static Organization createTestErgInstitution() {
         Organization institution = new Organization();
-        institution.setId("erg-institution-example");
+        //institution.setId("erg-institution-example");
 
         // Meta mit Profil URL setzen (inkl. Version)
         Meta meta = new Meta();
@@ -187,7 +188,7 @@ public class ErgTestResourceUtil {
         telematikId.setType(new CodeableConcept().addCoding(
                 new Coding("http://terminology.hl7.org/CodeSystem/v2-0203", "PRN", null))) // Gemäß Pattern
             .setSystem("https://gematik.de/fhir/sid/telematik-id") // mustSupport=true
-            .setValue("3-TelematikID123"); // mustSupport=true
+            .setValue("5-SMC-B-Testkarte-883110000129072"); // mustSupport=true
 
         // IKNR (min=0, max=1, mustSupport=true)
         Identifier iknr = institution.addIdentifier();
@@ -226,7 +227,7 @@ public class ErgTestResourceUtil {
             .setDisplay("Allgemeinmedizin"); // mustSupport für system und code
 
         // Name (min=0, max=1, mustSupport=true)
-        institution.setName("Gemeinschaftspraxis Musterstadt");
+        institution.setName("Krankenhaus St. KilianTEST-ONLY");
 
         // Telecom Slicing (mustSupport=true für das Slicing)
         // Telefon (min=0, max=*, mustSupport=true)
@@ -630,10 +631,10 @@ public class ErgTestResourceUtil {
         context.addRelated(relatedPatientRef);
 
         // Anhangs-Referenz
-        Reference relatedAnhangRef = new Reference("DocumentReference/" + anhangDocRefId);
-        relatedAnhangRef.setType("DocumentReference");
-        relatedAnhangRef.setDisplay("Referenz auf Anhangsdokument (ID: " + anhangDocRefId + ")");
-        context.addRelated(relatedAnhangRef);
+//        Reference relatedAnhangRef = new Reference("DocumentReference/" + anhangDocRefId);
+//        relatedAnhangRef.setType("DocumentReference");
+//        relatedAnhangRef.setDisplay("Referenz auf Anhangsdokument (ID: " + anhangDocRefId + ")");
+//        context.addRelated(relatedAnhangRef);
 
         // Extensions (mustSupport=true für die Extensions selbst)
         // Extension: docRef-signature (min=0, max=1, mustSupport=true) - Pflicht wegen Constraint SignaturVerpflichtendRechnung
