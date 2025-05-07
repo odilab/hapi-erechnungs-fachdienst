@@ -625,10 +625,10 @@ public class ErgTestResourceUtil {
 
         // Context.related: Referenzen zu Patient und Anhang hinzufügen (jetzt optional laut Profil)
         // Patienten-Referenz
-        Reference relatedPatientRef = new Reference("Patient/" + patient.getIdElement().getIdPart());
-        relatedPatientRef.setType("Patient");
-        relatedPatientRef.setDisplay(patient.getNameFirstRep().getText());
-        context.addRelated(relatedPatientRef);
+        // Reference relatedPatientRef = new Reference("Patient/" + patient.getIdElement().getIdPart());
+        // relatedPatientRef.setType("Patient");
+        // relatedPatientRef.setDisplay(patient.getNameFirstRep().getText());
+        // context.addRelated(relatedPatientRef);
 
         // Anhangs-Referenz
 //        Reference relatedAnhangRef = new Reference("DocumentReference/" + anhangDocRefId);
