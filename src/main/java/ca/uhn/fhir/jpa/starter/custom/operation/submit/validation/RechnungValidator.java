@@ -226,6 +226,39 @@ public class RechnungValidator {
                     DocumentReference transformedRechnung = savedRechnung.copy();
                     transformedRechnung.setId((String)null); 
 
+                    // Setze/Überschreibe Metadaten der transformierten Rechnung
+                    Meta meta = transformedRechnung.getMeta();
+                    if (meta == null) {
+                        meta = new Meta();
+                        transformedRechnung.setMeta(meta);
+                    }
+                    // Vorhandene relevante Metadaten entfernen
+                    meta.getExtension().removeIf(ext -> "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung".equals(ext.getUrl()));
+                    meta.getProfile().clear(); // Alle Profile entfernen, um Duplikate zu vermeiden
+                    meta.getTag().removeIf(tag -> "https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs".equals(tag.getSystem()));
+
+                    // 1. Markierungserweiterung hinzufügen
+                    Extension markierungOuterExt = new Extension("https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung");
+                    Extension markierungInnerExt = new Extension("markierung");
+                    Coding markierungCoding = new Coding()
+                        .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-dokument-artderarchivierung-cs")
+                        .setCode("persoenlich")
+                        .setDisplay("Persönliche Ablage");
+                    markierungInnerExt.setValue(markierungCoding);
+                    markierungOuterExt.addExtension(markierungInnerExt);
+                    meta.addExtension(markierungOuterExt);
+
+                    // 2. Profil hinzufügen
+                    meta.addProfile("https://gematik.de/fhir/erg/StructureDefinition/erg-dokumentenmetadaten|1.1.0-RC1");
+
+                    // 3. Rechnungsstatus-Tag hinzufügen
+                    meta.addTag(
+                        "https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs",
+                        "offen",
+                        "Offen"
+                    );
+                    LOGGER.info("Metadaten (Markierung, Profil, Status-Tag) für transformierte Rechnung gesetzt/überschrieben.");
+
                     // --> Modifiziere die transformierte Rechnung basierend auf gespeicherten Invoices
                     if (!invoiceUrlMap.isEmpty()) {
                         LOGGER.debug("Modifiziere transformierte Rechnung: Ersetze Daten durch URLs für Indizes: {}", invoiceUrlMap.keySet());
