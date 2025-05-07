@@ -14,7 +14,9 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import org.springframework.stereotype.Component;
 
+@Component
 public class SignatureService {
     
     public SignatureService() {

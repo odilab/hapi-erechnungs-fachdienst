@@ -6,9 +6,11 @@ import org.hl7.fhir.r4.model.Extension;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Signature;
 import org.hl7.fhir.r4.model.Identifier;
+import org.springframework.stereotype.Component;
 
 import java.util.Date;
 
+@Component
 public class FhirSignatureService {
 
     private static final String SIGNATURE_EXTENSION_URL = "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-signature";
