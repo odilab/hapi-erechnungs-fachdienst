@@ -7,6 +7,9 @@ import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
 import ca.uhn.fhir.jpa.starter.custom.operation.submit.TokenGenerationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.submit.PdfEnrichmentService;
+import ca.uhn.fhir.jpa.starter.custom.signature.FhirSignatureService;
+import ca.uhn.fhir.jpa.starter.custom.signature.KeyLoader;
+import ca.uhn.fhir.jpa.starter.custom.signature.SignatureService;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.CodeType;
 import org.hl7.fhir.r4.model.OperationOutcome;
@@ -44,6 +47,8 @@ public class RechnungValidator {
     private final TokenGenerationService tokenGenerationService;
     private final PdfEnrichmentService pdfEnrichmentService;
     private final FhirContext ctx;
+    private final SignatureService signatureService;
+    private final FhirSignatureService fhirSignatureService;
 
     /**
      * Container-Klasse für das Ergebnis der Validierung und Transformation.
@@ -59,12 +64,14 @@ public class RechnungValidator {
     }
 
     @Autowired
-    public RechnungValidator(CustomValidator customValidator, DaoRegistry daoRegistry, TokenGenerationService tokenGenerationService, PdfEnrichmentService pdfEnrichmentService, FhirContext ctx) {
+    public RechnungValidator(CustomValidator customValidator, DaoRegistry daoRegistry, TokenGenerationService tokenGenerationService, PdfEnrichmentService pdfEnrichmentService, FhirContext ctx, SignatureService signatureService, FhirSignatureService fhirSignatureService) {
         this.customValidator = customValidator;
         this.daoRegistry = daoRegistry;
         this.tokenGenerationService = tokenGenerationService;
         this.pdfEnrichmentService = pdfEnrichmentService;
         this.ctx = ctx;
+        this.signatureService = signatureService;
+        this.fhirSignatureService = fhirSignatureService;
     }
 
     /**
@@ -84,6 +91,8 @@ public class RechnungValidator {
         List<SingleValidationMessage> allWarningsAndInfos = new ArrayList<>();
         Map<Integer, String> invoiceUrlMap = new HashMap<>();
         Map<Integer, byte[]> pdfDataToEnrichMap = new HashMap<>();
+        byte[] pdfDataForSigning = null;
+        byte[] invoiceJsonDataForSigning = null;
 
         if (rechnung == null) {
             LOGGER.warn("validate wurde mit einer null DocumentReference aufgerufen.");
@@ -127,6 +136,12 @@ public class RechnungValidator {
                             if (parsedResource instanceof Invoice) {
                                 Invoice parsedInvoice = (Invoice) parsedResource;
                                 LOGGER.info("Successfully parsed Invoice from content index {}", i);
+
+                                // Store for signing if it's the first one
+                                if (invoiceJsonDataForSigning == null) {
+                                    invoiceJsonDataForSigning = decodedBytes; // Store raw JSON/XML bytes
+                                    LOGGER.debug("FHIR Invoice-Daten (Index {}) für Signatur zwischengespeichert.", i);
+                                }
 
                                 // Validiere die Invoice
                                 ValidationResult invoiceValidationResult = customValidator.validateAndReturnResult(parsedInvoice);
@@ -173,6 +188,11 @@ public class RechnungValidator {
                         try (PDDocument ignored = PDDocument.load(pdfData)) {
                             // Erfolgreich geladen, also wahrscheinlich eine valide PDF
                             LOGGER.debug("PDF in content index {} scheint valide zu sein.", i);
+                             // Store for signing if it's the first one
+                            if (pdfDataForSigning == null) {
+                                pdfDataForSigning = pdfData; // Store raw PDF bytes
+                                LOGGER.debug("PDF-Daten (Index {}) für Signatur zwischengespeichert.", i);
+                            }
                             if ("normal".equalsIgnoreCase(modusValue)) {
                                 pdfDataToEnrichMap.put(i, pdfData); // Für spätere Anreicherung merken
                             }
@@ -277,6 +297,30 @@ public class RechnungValidator {
                         }
                     }
 
+                    // Signatur für die transformierte Rechnung (wenn anwendbar)
+                    boolean isRechnungType = rechnung.getType() != null &&
+                            rechnung.getType().getCoding().stream().anyMatch(coding ->
+                                    "http://dvmd.de/fhir/CodeSystem/kdl".equals(coding.getSystem()) &&
+                                            "AM010106".equals(coding.getCode())
+                            );
+
+                    if (isRechnungType) {
+                        if (pdfDataForSigning != null && invoiceJsonDataForSigning != null) {
+                            try {
+                                LOGGER.info("Versuche, die transformierte Rechnung ID {} zu signieren.", generatedTokenId);
+                                signTransformedDocument(transformedRechnung, pdfDataForSigning, invoiceJsonDataForSigning);
+                                LOGGER.info("Transformierte Rechnung ID {} erfolgreich signiert.", generatedTokenId);
+                            } catch (Exception eSign) {
+                                LOGGER.error("Fehler bei der Signaturerstellung für transformierte Rechnung ID {}.", generatedTokenId, eSign);
+                                throw new UnprocessableEntityException("Fehler bei der Signaturerstellung für transformierte Rechnung: " + eSign.getMessage(), eSign);
+                            }
+                        } else {
+                            LOGGER.warn("Überspringe Signatur für transformierte Rechnung ID {}: PDF-Daten oder Invoice-JSON-Daten für die Signatur fehlen.", generatedTokenId);
+                        }
+                    } else {
+                        LOGGER.info("Überspringe Signatur für transformierte Rechnung ID {}: Dokumenttyp ist nicht 'Rechnung' oder Typinformation fehlt.", generatedTokenId);
+                    }
+
                     // Speichere die transformierte DocumentReference via UPDATE
                     LOGGER.info("Speichere transformierte DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId);
                     try {
@@ -364,5 +408,28 @@ public class RechnungValidator {
                 .addLocation(message.getLocationString()); // Ort separat
         });
         return outcome;
+    }
+
+    private void signTransformedDocument(DocumentReference documentToSign, byte[] pdfData, byte[] invoiceJsonData) throws Exception {
+        LOGGER.debug("Lade Schlüsselmaterial für die Signatur der transformierten Rechnung (ID: {}).", documentToSign.getId());
+        // KeyMaterial laden (Pfade und Passwort sind hier hartcodiert, wie im DocumentProcessorService)
+        KeyLoader.KeyMaterial keyMaterial = KeyLoader.loadKeyMaterial(
+                "src/main/resources/certificates/fachdienst.p12",
+                "changeit"
+        );
+        LOGGER.debug("Schlüsselmaterial geladen. Erstelle CAdES-Signatur.");
+
+        // Signatur erstellen
+        byte[] cadesSignature = this.signatureService.signPdfAndFhir(
+                pdfData,
+                invoiceJsonData,
+                keyMaterial.getCertificate(),
+                keyMaterial.getPrivateKey()
+        );
+        LOGGER.debug("CAdES-Signatur erstellt (Größe: {} Bytes). Hänge Signatur an transformierte Rechnung an.", cadesSignature.length);
+
+        // Signatur an DocumentReference anhängen
+        this.fhirSignatureService.attachCadesSignature(documentToSign, cadesSignature);
+        LOGGER.info("CAdES-Signatur erfolgreich an transformierte DocumentReference (ID: {}) angehängt.", documentToSign.getId());
     }
 } 
