@@ -95,6 +95,7 @@ public class RechnungValidator {
         Map<Integer, byte[]> pdfDataToEnrichMap = new HashMap<>();
         byte[] pdfDataForSigning = null;
         byte[] invoiceJsonDataForSigning = null;
+        String patientReferenceFromInvoice = null;
 
         if (rechnung == null) {
             LOGGER.warn("validate wurde mit einer null DocumentReference aufgerufen.");
@@ -143,6 +144,12 @@ public class RechnungValidator {
                                 if (invoiceJsonDataForSigning == null) {
                                     invoiceJsonDataForSigning = decodedBytes; // Store raw JSON/XML bytes
                                     LOGGER.debug("FHIR Invoice-Daten (Index {}) für Signatur zwischengespeichert.", i);
+                                }
+
+                                // Extract patient reference from Invoice for context.related
+                                if (patientReferenceFromInvoice == null && parsedInvoice.hasSubject() && parsedInvoice.getSubject().hasReference()) {
+                                    patientReferenceFromInvoice = parsedInvoice.getSubject().getReference();
+                                    LOGGER.debug("Patientenreferenz '{}' aus Invoice (Index {}) für context.related extrahiert.", patientReferenceFromInvoice, i);
                                 }
 
                                 // Validiere die Invoice
@@ -258,6 +265,27 @@ public class RechnungValidator {
                         "Offen"
                     );
                     LOGGER.info("Metadaten (Markierung, Profil, Status-Tag) für transformierte Rechnung gesetzt/überschrieben.");
+
+                    // Setze DocumentReference.context.related basierend auf der extrahierten Patientenreferenz
+                    if (patientReferenceFromInvoice != null) {
+                        DocumentReference.DocumentReferenceContextComponent context = transformedRechnung.getContext();
+                        if (!transformedRechnung.hasContext()) { // Prüfen, ob Kontext bereits existiert, sonst neu erstellen
+                            context = new DocumentReference.DocumentReferenceContextComponent();
+                            transformedRechnung.setContext(context);
+                        }
+                        context.getRelated().clear(); // Vorhandene Einträge entfernen
+
+                        Reference relatedPatientRef = new Reference(patientReferenceFromInvoice);
+                        relatedPatientRef.setType("Patient");
+                        // Hinweis: Für das Setzen von relatedPatientRef.setDisplay() müsste die Patient-Ressource
+                        // zusätzlich vom Server geladen werden, um den Namen zu extrahieren.
+                        // z.B. Patient p = daoRegistry.getResourceDao(Patient.class).read(new IdType(patientReferenceFromInvoice));
+                        // if (p != null && p.hasName()) { relatedPatientRef.setDisplay(p.getNameFirstRep().getNameAsSingleString()); }
+                        context.addRelated(relatedPatientRef);
+                        LOGGER.info("DocumentReference.context.related für transformierte Rechnung mit Patientenreferenz '{}' gesetzt.", patientReferenceFromInvoice);
+                    } else {
+                        LOGGER.warn("Keine Patientenreferenz aus einer Invoice gefunden. DocumentReference.context.related wird nicht gesetzt.");
+                    }
 
                     // --> Modifiziere die transformierte Rechnung basierend auf gespeicherten Invoices
                     if (!invoiceUrlMap.isEmpty()) {
