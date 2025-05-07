@@ -489,11 +489,11 @@ public class ErgTestResourceUtil {
         docRef.setMeta(meta);
 
         // meta.tag (erg-rechnungsstatus) - mustSupport=true
-        Coding statusTag = new Coding()
-            .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs")
-            .setCode("offen") // Gültiger Code
-            .setDisplay("Offen");
-        docRef.getMeta().addTag(statusTag);
+        // Coding statusTag = new Coding()
+        //     .setSystem("https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs")
+        //     .setCode("offen") // Gültiger Code
+        //     .setDisplay("Offen");
+        // docRef.getMeta().addTag(statusTag);
 
         // meta.extension (markierung) - mustSupport=true
         Extension markierungOuterExt = docRef.getMeta().addExtension();
