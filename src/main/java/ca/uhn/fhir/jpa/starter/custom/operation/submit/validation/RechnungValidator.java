@@ -38,6 +38,7 @@ import java.io.IOException;
 public class RechnungValidator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RechnungValidator.class);
+    private static final long MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
     private final CustomValidator customValidator;
     private final DaoRegistry daoRegistry;
     private final TokenGenerationService tokenGenerationService;
@@ -112,6 +113,11 @@ public class RechnungValidator {
                     if (isFhirJson || isFhirXml) {
                         LOGGER.debug("Found potential FHIR Invoice in content index {} with contentType: {}", i, contentType);
                         try {
+                            // Größenprüfung vor der Dekodierung
+                            if (attachment.getData().length > MAX_ATTACHMENT_SIZE_BYTES) {
+                                LOGGER.error("Attachment-Daten bei Index {} überschreiten die maximale Größe von {} Bytes.", i, MAX_ATTACHMENT_SIZE_BYTES);
+                                throw new UnprocessableEntityException("Attachment bei Index " + i + " überschreitet die maximale Größe von 10MB.");
+                            }
                             byte[] decodedBytes = Base64.getDecoder().decode(attachment.getData());
                             String decodedString = new String(decodedBytes, StandardCharsets.UTF_8);
                             
@@ -159,6 +165,11 @@ public class RechnungValidator {
                     } else if (isPdf) {
                         LOGGER.debug("Found PDF Attachment in content index {}", i);
                         byte[] pdfData = attachment.getData();
+                        // Größenprüfung für PDF
+                        if (pdfData.length > MAX_ATTACHMENT_SIZE_BYTES) {
+                            LOGGER.error("PDF-Attachment-Daten bei Index {} überschreiten die maximale Größe von {} Bytes.", i, MAX_ATTACHMENT_SIZE_BYTES);
+                            throw new UnprocessableEntityException("PDF-Attachment bei Index " + i + " überschreitet die maximale Größe von 10MB.");
+                        }
                         try (PDDocument ignored = PDDocument.load(pdfData)) {
                             // Erfolgreich geladen, also wahrscheinlich eine valide PDF
                             LOGGER.debug("PDF in content index {} scheint valide zu sein.", i);
