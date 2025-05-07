@@ -5,6 +5,7 @@ import ca.uhn.fhir.parser.IParser;
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
+import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.operation.submit.TokenGenerationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.submit.PdfEnrichmentService;
 import ca.uhn.fhir.jpa.starter.custom.signature.FhirSignatureService;
@@ -84,9 +85,10 @@ public class RechnungValidator {
      *
      * @param rechnung Die zu validierende DocumentReference.
      * @param modus Der Verarbeitungsmodus ('normal' oder 'test').
+     * @param accessToken Das AccessToken mit den Informationen des authentifizierten Benutzers.
      * @return Ein ValidationAndTransformResult Objekt, das ggf. Warnungen und die transformierte Rechnung enthält.
      */
-    public ValidationAndTransformResult validate(DocumentReference rechnung, CodeType modus) {
+    public ValidationAndTransformResult validate(DocumentReference rechnung, CodeType modus, AccessToken accessToken) {
         DocumentReference finalTransformedRechnung = null;
         List<SingleValidationMessage> allWarningsAndInfos = new ArrayList<>();
         Map<Integer, String> invoiceUrlMap = new HashMap<>();
@@ -251,6 +253,23 @@ public class RechnungValidator {
                     String generatedTokenId = tokenGenerationService.generateUniqueToken();
                     transformedRechnung.setId(generatedTokenId);
                     LOGGER.info("Generierte eindeutige ID für transformierte Rechnung (und PDF QR-Codes): {}", generatedTokenId);
+
+                    // Setze/Überschreibe DocumentReference.author mit Telematik-ID aus AccessToken
+                    if (accessToken != null && accessToken.getTelematikId().isPresent()) {
+                        String telematikId = accessToken.getTelematikId().get();
+                        transformedRechnung.getAuthor().clear(); // Vorhandene Autoren entfernen
+                        Reference authorReference = new Reference();
+                        Identifier authorIdentifier = new Identifier()
+                            .setSystem("https://gematik.de/fhir/sid/telematik-id") // Standard-System für Telematik-ID
+                            .setValue(telematikId);
+                        authorReference.setIdentifier(authorIdentifier);
+                        // Optional: Display-Name setzen, falls gewünscht/verfügbar
+                        // authorReference.setDisplay("Anzeiger Name des Authors");
+                        transformedRechnung.addAuthor(authorReference);
+                        LOGGER.info("DocumentReference.author der transformierten Rechnung mit Telematik-ID {} gesetzt.", telematikId);
+                    } else {
+                        LOGGER.warn("Keine Telematik-ID im AccessToken gefunden oder AccessToken ist null. DocumentReference.author wird nicht gesetzt/überschrieben.");
+                    }
 
                     // PDFs anreichern, als Binary speichern und URLs in transformedRechnung eintragen
                     Map<Integer, String> storedPdfBinaryUrlMap = new HashMap<>();
