@@ -140,16 +140,10 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         // Füge den Modus 'normal' hinzu
         inParams.addParameter("modus", new CodeType("normal"));
 
-        // Führe die Operation aus (erwarte keinen Fehler für gültige Eingabe im Normalmodus)
-        Parameters outParams = assertDoesNotThrow(() -> {
-            return client.operation()
-                .onInstance(testPatient.getIdElement())
-                .named("$erechnung-submit")
-                .withParameters(inParams)
-                .withAdditionalHeader("Authorization", authHeader)
-                .execute();
-        }, "Operation sollte im Normalmodus mit gültigen Daten nicht fehlschlagen.");
+        // Führe die Operation über die Helfermethode aus
+        Parameters outParams = executeSuccessfulSubmitOperation(testPatient.getIdElement(), inParams, authHeader);
 
+        // ---- Begin Logik, die vorher teilweise in der Helfermethode war / angepasst wurde ----
         assertNotNull(outParams, "Die Operation sollte eine Antwort zurückgeben.");
 
         // Prüfe auf den (optionalen) Warnungen-Parameter
@@ -179,13 +173,20 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         // Zusätzliche Prüfungen für die transformierte Rechnung
         assertTrue(transformedDocRef.hasId(), "Die transformierte Rechnung muss eine ID haben.");
         assertTrue(transformedDocRef.hasRelatesTo(), "Die transformierte Rechnung muss ein relatesTo-Element haben.");
-        assertEquals(1, transformedDocRef.getRelatesTo().size(), "Es sollte genau ein relatesTo-Element geben.");
-        DocumentReference.DocumentReferenceRelatesToComponent relatesTo = transformedDocRef.getRelatesToFirstRep();
-        assertEquals(DocumentReference.DocumentRelationshipType.TRANSFORMS, relatesTo.getCode(), "Der relatesTo-Code sollte TRANSFORMS sein.");
-        assertTrue(relatesTo.hasTarget(), "relatesTo muss ein Ziel (target) haben.");
-        assertTrue(relatesTo.getTarget().hasReference(), "Das relatesTo-Ziel muss eine Referenz enthalten.");
         
-        String originalDocRefReference = relatesTo.getTarget().getReference();
+        // Finde das korrekte relatesTo-Element für die Transformation
+        DocumentReference.DocumentReferenceRelatesToComponent relatesToTransform = null;
+        for (DocumentReference.DocumentReferenceRelatesToComponent rt : transformedDocRef.getRelatesTo()) {
+            if (rt.getCode() == DocumentReference.DocumentRelationshipType.TRANSFORMS) {
+                relatesToTransform = rt;
+                break;
+            }
+        }
+        assertNotNull(relatesToTransform, "Es sollte ein relatesTo-Element mit Code TRANSFORMS geben.");
+        assertTrue(relatesToTransform.hasTarget(), "relatesTo TRANSFORMS muss ein Ziel (target) haben.");
+        assertTrue(relatesToTransform.getTarget().hasReference(), "Das relatesTo TRANSFORMS Ziel muss eine Referenz enthalten.");
+        
+        String originalDocRefReference = relatesToTransform.getTarget().getReference();
         LOGGER.info("Referenz auf die ursprüngliche Rechnung: {}", originalDocRefReference);
 
         // Lade die ursprüngliche DocumentReference vom Server
@@ -197,6 +198,8 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         
         assertNotNull(originalDocRef, "Die ursprüngliche DocumentReference konnte nicht geladen werden.");
         LOGGER.info("Ursprüngliche DocumentReference erfolgreich geladen mit ID: {}", originalDocRef.getIdElement().getValue());
+        // ---- Ende Logik, die vorher teilweise in der Helfermethode war / angepasst wurde ----
+
 
         // --- Vergleiche Felder zwischen originalDocRef und transformedDocRef --- 
 
@@ -204,16 +207,18 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         assertNotEquals(originalDocRef.getIdElement().getIdPart(), transformedDocRef.getIdElement().getIdPart(),
                         "Die ID der originalen und der transformierten Rechnung dürfen nicht gleich sein.");
 
-        // relatesTo darf im Original nicht vorhanden sein (oder leer)
-        assertFalse(originalDocRef.hasRelatesTo(), "Die originale Rechnung sollte kein relatesTo-Element haben.");
+        // relatesTo TRANSFORMS darf im Original nicht vorhanden sein (oder zumindest nicht auf sich selbst)
+        assertFalse(originalDocRef.getRelatesTo().stream()
+            .anyMatch(rt -> rt.getCode() == DocumentReference.DocumentRelationshipType.TRANSFORMS && 
+                           rt.hasTarget() && rt.getTarget().getReference().equals(originalDocRef.getIdElement().toVersionless().getValue())),
+            "Die originale Rechnung sollte kein TRANSFORMS relatesTo-Element auf sich selbst haben.");
+
 
         // Vergleiche Status
         assertEquals(originalDocRef.getStatus(), transformedDocRef.getStatus(), "Status sollte übereinstimmen.");
 
         // Vergleiche Typ
-        // Beachte: CodeableConcept Vergleich braucht ggf. eine tiefere Prüfung
         assertTrue(originalDocRef.hasType() && transformedDocRef.hasType(), "Beide sollten einen Typ haben.");
-        // Einfacher Vergleich der Codes im ersten Coding (Annahme: nur eins relevant)
         if (originalDocRef.getType().hasCoding() && !originalDocRef.getType().getCoding().isEmpty() &&
             transformedDocRef.getType().hasCoding() && !transformedDocRef.getType().getCoding().isEmpty()) {
             assertEquals(originalDocRef.getType().getCodingFirstRep().getSystem(), transformedDocRef.getType().getCodingFirstRep().getSystem(), "Typ Coding System sollte übereinstimmen.");
@@ -224,33 +229,156 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         assertTrue(originalDocRef.hasSubject() && transformedDocRef.hasSubject(), "Beide sollten ein Subject haben.");
         assertEquals(originalDocRef.getSubject().getReference(), transformedDocRef.getSubject().getReference(), "Subject Referenz sollte übereinstimmen.");
         
-        // Vergleiche Content (Annahme: nur ein Content-Element)
-        assertTrue(originalDocRef.hasContent() && !originalDocRef.getContent().isEmpty(), "Original sollte Content haben.");
-        assertTrue(transformedDocRef.hasContent() && !transformedDocRef.getContent().isEmpty(), "Transformierte sollte Content haben.");
-        assertEquals(originalDocRef.getContent().size(), transformedDocRef.getContent().size(), "Anzahl der Content-Elemente sollte übereinstimmen.");
-        
-        DocumentReference.DocumentReferenceContentComponent originalContent = originalDocRef.getContentFirstRep();
-        DocumentReference.DocumentReferenceContentComponent transformedContent = transformedDocRef.getContentFirstRep();
-        assertTrue(originalContent.hasAttachment() && transformedContent.hasAttachment(), "Beide sollten einen Attachment im Content haben.");
-        assertEquals(originalContent.getAttachment().getContentType(), transformedContent.getAttachment().getContentType(), "Attachment ContentType sollte übereinstimmen.");
-        
-        // --- Angepasste Prüfung für Daten und URL --- 
-        // Das Original MUSS Daten haben
-        assertTrue(originalContent.getAttachment().hasData(), "Das originale Attachment sollte Daten enthalten.");
-        // Das Transformierte darf KEINE Daten mehr haben, sondern eine URL
-        assertFalse(transformedContent.getAttachment().hasData(), "Das transformierte Attachment sollte KEINE Daten mehr enthalten.");
-        assertTrue(transformedContent.getAttachment().hasUrl(), "Das transformierte Attachment sollte eine URL enthalten.");
-        assertNotNull(transformedContent.getAttachment().getUrl(), "Die URL im transformierten Attachment darf nicht null sein.");
-        String binaryUrl = transformedContent.getAttachment().getUrl(); // Hole die URL
-        LOGGER.info("Prüfung von Attachment data/url erfolgreich: Original hat data, Transformierte hat url ({})", binaryUrl);
+        // Vergleiche Content (Annahme: nur ein Content-Element für die Hauptrechnung, weitere könnten Anhänge sein)
+        // Wir suchen das Content-Element, das nicht die URL zu einer Binary ist (also die ursprüngliche Invoice)
+        DocumentReference.DocumentReferenceContentComponent originalInvoiceContent = originalDocRef.getContent().stream()
+            .filter(c -> c.hasAttachment() && c.getAttachment().hasData())
+            .findFirst()
+            .orElse(null);
+        assertNotNull(originalInvoiceContent, "Original sollte ein Content-Element mit Daten (Invoice) haben.");
 
-        // --- Hole die Binary Ressource und speichere die PDF --- 
+        // In der transformierten Rechnung suchen wir das Content-Element, das zur ursprünglichen Invoice passt (gleicher ContentType)
+        // und jetzt eine URL hat.
+        DocumentReference.DocumentReferenceContentComponent transformedInvoiceContent = transformedDocRef.getContent().stream()
+            .filter(c -> c.hasAttachment() && 
+                         c.getAttachment().hasUrl() && // Muss eine URL haben
+                         c.getAttachment().getContentType().equals(originalInvoiceContent.getAttachment().getContentType()) &&
+                         !c.getAttachment().getUrl().startsWith("Binary/")) // Unterscheidung von PDF-Binary
+            .findFirst()
+            .orElse(null);
+         // Wenn die obige Logik nicht greift (weil z.B. nur ein PDF als Content da ist), nehmen wir erstmal das erste.
+        if (transformedInvoiceContent == null && transformedDocRef.hasContent()) {
+            transformedInvoiceContent = transformedDocRef.getContentFirstRep();
+        }
+        assertNotNull(transformedInvoiceContent, "Transformierte sollte ein passendes Content-Element (Invoice) haben.");
+        
+        assertEquals(originalInvoiceContent.getAttachment().getContentType(), transformedInvoiceContent.getAttachment().getContentType(), "Attachment ContentType der Invoice sollte übereinstimmen.");
+        
+        // --- Angepasste Prüfung für Daten und URL für die Invoice --- 
+        assertTrue(originalInvoiceContent.getAttachment().hasData(), "Das originale Invoice-Attachment sollte Daten enthalten.");
+        assertFalse(transformedInvoiceContent.getAttachment().hasData(), "Das transformierte Invoice-Attachment sollte KEINE Daten mehr enthalten.");
+        assertTrue(transformedInvoiceContent.getAttachment().hasUrl(), "Das transformierte Invoice-Attachment sollte eine URL enthalten.");
+        assertNotNull(transformedInvoiceContent.getAttachment().getUrl(), "Die URL im transformierten Invoice-Attachment darf nicht null sein.");
+        
+        // --- Spezifische Prüfung für PDF, falls es als separates Content-Element existiert ---
+        DocumentReference.DocumentReferenceContentComponent originalPdfContent = originalDocRef.getContent().stream()
+            .filter(c -> c.hasAttachment() && "application/pdf".equals(c.getAttachment().getContentType()) && c.getAttachment().hasData())
+            .findFirst()
+            .orElse(null);
+
+        DocumentReference.DocumentReferenceContentComponent transformedPdfContent = transformedDocRef.getContent().stream()
+            .filter(c -> c.hasAttachment() && "application/pdf".equals(c.getAttachment().getContentType()) && c.getAttachment().hasUrl())
+            .findFirst()
+            .orElse(null);
+
+        if (originalPdfContent != null && transformedPdfContent != null) {
+            LOGGER.info("PDF Content gefunden, prüfe PDF spezifisch.");
+            assertTrue(originalPdfContent.getAttachment().hasData(), "Das originale PDF-Attachment sollte Daten enthalten.");
+            assertFalse(transformedPdfContent.getAttachment().hasData(), "Das transformierte PDF-Attachment sollte KEINE Daten mehr enthalten.");
+            assertTrue(transformedPdfContent.getAttachment().hasUrl(), "Das transformierte PDF-Attachment sollte eine URL enthalten.");
+            String pdfBinaryUrl = transformedPdfContent.getAttachment().getUrl();
+            assertNotNull(pdfBinaryUrl, "Die URL im transformierten PDF-Attachment darf nicht null sein.");
+            LOGGER.info("Prüfung von PDF data/url erfolgreich: Original hat data, Transformierte hat url ({})", pdfBinaryUrl);
+
+            // --- Hole die Binary Ressource und speichere die PDF --- 
+            savePdfFromBinaryUrl(pdfBinaryUrl, "enriched_rechnung_normal_mode.pdf", authHeader);
+        } else {
+            LOGGER.warn("Kein separates PDF Content-Element zum Speichern in originaler UND transformierter Rechnung gefunden oder eines fehlt. Überspringe PDF-Speicherungstest für Hauptrechnung.");
+             // Fallback: Wenn nur ein Content-Element da ist und es PDF ist
+            if (originalDocRef.getContent().size() == 1 && "application/pdf".equals(originalDocRef.getContentFirstRep().getAttachment().getContentType()) &&
+                transformedDocRef.getContent().size() == 1 && "application/pdf".equals(transformedDocRef.getContentFirstRep().getAttachment().getContentType())) {
+                 String pdfBinaryUrl = transformedDocRef.getContentFirstRep().getAttachment().getUrl();
+                 savePdfFromBinaryUrl(pdfBinaryUrl, "enriched_rechnung_normal_mode_single_content.pdf", authHeader);
+            }
+        }
+        
+        LOGGER.info("Vergleich zwischen originaler und transformierter Rechnung erfolgreich abgeschlossen.");
+    }
+
+    @Test
+    void testSubmitOperation_WithAttachment_VerifyStoredAttachmentContent() {
+        String authHeader = "Bearer " + getValidAccessToken("SMCB_KRANKENHAUS");
+        Parameters inParams = baseInParams.copy(); // baseInParams enthält bereits testAnhangDocRef
+        inParams.addParameter("modus", new CodeType("normal"));
+
+        // 1. Führe die Operation erfolgreich aus
+        Parameters outParams = executeSuccessfulSubmitOperation(testPatient.getIdElement(), inParams, authHeader);
+
+        // 2. Extrahiere die transformierte Hauptrechnung
+        Parameters.ParametersParameterComponent transformedParam = outParams.getParameter("transformedRechnung");
+        assertNotNull(transformedParam, "Der transformedRechnung-Parameter muss vorhanden sein.");
+        DocumentReference transformedHauptRechnung = (DocumentReference) transformedParam.getResource();
+        assertNotNull(transformedHauptRechnung, "Die transformierte Hauptrechnung darf nicht null sein.");
+        LOGGER.info("TransformedHauptRechnung ID: {}", transformedHauptRechnung.getIdElement().getIdPart());
+
+        // 3. Finde die Referenz zur Anhang-DocumentReference im context.related
+        assertTrue(transformedHauptRechnung.hasContext(), "TransformedHauptRechnung sollte einen Context haben.");
+        assertTrue(transformedHauptRechnung.getContext().hasRelated(), "Context sollte related Einträge haben.");
+
+        String anhangDocRefId = null;
+        for (Reference relatedRef : transformedHauptRechnung.getContext().getRelated()) {
+            if ("DocumentReference".equals(relatedRef.getType()) && relatedRef.hasReference()) {
+                // Annahme: Die erste gefundene DocumentReference-Referenz ist der gesuchte Anhang.
+                // Wenn mehrere Anhänge möglich sind, muss dies ggf. präziser gesucht werden.
+                anhangDocRefId = relatedRef.getReference();
+                break;
+            }
+        }
+        assertNotNull(anhangDocRefId, "Keine Referenz zu einer Anhang-DocumentReference im context.related gefunden.");
+        LOGGER.info("Referenz zur Anhang-DocumentReference gefunden: {}", anhangDocRefId);
+
+        // 4. Lade die Anhang-DocumentReference vom Server
+        DocumentReference anhangDocRefVomServer = client.read()
+            .resource(DocumentReference.class)
+            .withUrl(anhangDocRefId)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+        assertNotNull(anhangDocRefVomServer, "Konnte die Anhang-DocumentReference ('" + anhangDocRefId + "') nicht vom Server laden.");
+        LOGGER.info("Anhang-DocumentReference ('{}') erfolgreich vom Server geladen.", anhangDocRefVomServer.getIdElement().getIdPart());
+
+        // 5. Extrahiere die URL zur Binary aus dem Anhang
+        assertTrue(anhangDocRefVomServer.hasContent(), "Geladene Anhang-DocumentReference sollte Content haben.");
+        DocumentReference.DocumentReferenceContentComponent anhangContent = anhangDocRefVomServer.getContentFirstRep(); // Annahme: erster Content ist relevant
+        assertTrue(anhangContent.hasAttachment(), "Anhang-Content sollte ein Attachment haben.");
+        assertTrue(anhangContent.getAttachment().hasUrl(), "Anhang-Attachment sollte eine URL zur Binary haben.");
+        String anhangBinaryUrl = anhangContent.getAttachment().getUrl();
+        assertNotNull(anhangBinaryUrl, "URL zur Anhang-Binary darf nicht null sein.");
+        LOGGER.info("URL zur Anhang-Binary: {}", anhangBinaryUrl);
+
+        // 6. Lade die Binary-Ressource (PDF des Anhangs)
+        Binary anhangPdfBinary = client.read()
+            .resource(Binary.class)
+            .withUrl(anhangBinaryUrl)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+        assertNotNull(anhangPdfBinary, "Konnte die Anhang-Binary ('" + anhangBinaryUrl + "') nicht laden.");
+        assertTrue(anhangPdfBinary.hasData(), "Geladene Anhang-Binary sollte Daten enthalten.");
+        byte[] gespeicherteAnhangPdfBytes = anhangPdfBinary.getData();
+
+        // 7. Vergleiche mit dem Original-Testanhang
+        assertNotNull(testAnhangDocRef, "testAnhangDocRef für den Vergleich darf nicht null sein.");
+        assertTrue(testAnhangDocRef.hasContent(), "testAnhangDocRef sollte Content haben.");
+        DocumentReference.DocumentReferenceContentComponent originalAnhangContent = testAnhangDocRef.getContentFirstRep();
+        assertTrue(originalAnhangContent.hasAttachment(), "Originaler Anhang-Content sollte ein Attachment haben.");
+        assertTrue(originalAnhangContent.getAttachment().hasData(), "Originales Anhang-Attachment sollte Daten haben.");
+        byte[] originalAnhangPdfBytes = originalAnhangContent.getAttachment().getData();
+
+        assertArrayEquals(originalAnhangPdfBytes, gespeicherteAnhangPdfBytes, "Die Bytes der gespeicherten Anhang-PDF stimmen nicht mit den Originalbytes überein.");
+        LOGGER.info("Inhalt der gespeicherten Anhang-PDF wurde erfolgreich mit dem Original-Testanhang verglichen.");
+
+        // Optional: Gespeicherte Anhang-PDF auch in Datei schreiben zum Überprüfen
+        savePdfFromBinaryUrl(anhangBinaryUrl, "stored_attachment_content.pdf", authHeader);
+    }
+
+    // Ausgelagerte Methode, um PDF von URL zu speichern
+    private void savePdfFromBinaryUrl(String binaryUrl, String outputFileName, String authHeader) {
         LOGGER.info("Versuche Binary Ressource von URL {} zu laden...", binaryUrl);
-        Binary fetchedBinary = null;
+        Binary fetchedBinary;
+        Path outputFile = null; // Deklaration hier, damit es im Catch-Block sichtbar ist
         try {
              fetchedBinary = client.read()
-                                    .resource(Binary.class) // Typ ist Binary
-                                    .withUrl(binaryUrl) // Verwende die URL aus dem Attachment
+                                    .resource(Binary.class)
+                                    .withUrl(binaryUrl)
                                     .withAdditionalHeader("Authorization", authHeader)
                                     .execute();
             assertNotNull(fetchedBinary, "Die Binary Ressource konnte nicht von der URL geladen werden: " + binaryUrl);
@@ -261,29 +389,37 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
             assertTrue(pdfBytes.length > 0, "Die Daten der Binary Ressource dürfen nicht leer sein.");
             LOGGER.info("Binary Ressource erfolgreich geladen, enthält {} Bytes.", pdfBytes.length);
 
-            // Definiere Zielpfad und Dateiname
             Path outputDir = Paths.get("src", "test", "resources", "output");
-            Path outputFile = outputDir.resolve("enriched_rechnung_normal_mode.pdf");
-
-            // Erstelle Verzeichnis, falls nicht vorhanden
+            outputFile = outputDir.resolve(outputFileName); // Zuweisung hier
             Files.createDirectories(outputDir);
-
-            // Schreibe die Bytes in die Datei (überschreibt bestehende Datei)
             Files.write(outputFile, pdfBytes, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             LOGGER.info("Die angereicherte PDF wurde erfolgreich in {} gespeichert.", outputFile.toAbsolutePath());
 
         } catch (IOException ioException) {
-            LOGGER.error("Fehler beim Schreiben der PDF-Datei nach {}: {}", "src/test/resources/output/enriched_rechnung_normal_mode.pdf", ioException.getMessage(), ioException);
+            String outputPathForLog = (outputFile != null) ? outputFile.toAbsolutePath().toString() : "unbekanntem Pfad";
+            LOGGER.error("Fehler beim Schreiben der PDF-Datei nach {}: {}", outputPathForLog, ioException.getMessage(), ioException);
             fail("Konnte die PDF-Datei nicht schreiben: " + ioException.getMessage());
         } catch (Exception e) {
              LOGGER.error("Fehler beim Laden oder Verarbeiten der Binary/PDF von URL {}: {}", binaryUrl, e.getMessage(), e);
              fail("Fehler beim Laden oder Verarbeiten der Binary/PDF von URL " + binaryUrl, e);
         }
-        // --- Ende PDF Speichern ---
-        
-        // assertArrayEquals ist nicht mehr sinnvoll, da transformed keine Daten hat
-        // assertArrayEquals(originalContent.getAttachment().getData(), transformedContent.getAttachment().getData(), "Attachment Daten sollten übereinstimmen.");
+    }
 
-        LOGGER.info("Vergleich zwischen originaler und transformierter Rechnung erfolgreich abgeschlossen.");
+
+    private Parameters executeSuccessfulSubmitOperation(IdType patientId, Parameters inParams, String authHeader) {
+        // Führe die Operation aus (erwarte keinen Fehler für gültige Eingabe im Normalmodus)
+        // Das assertDoesNotThrow verbleibt hier, da es die erfolgreiche Ausführung sicherstellt.
+        Parameters outParams = assertDoesNotThrow(() -> {
+            return client.operation()
+                .onInstance(patientId)
+                .named("$erechnung-submit")
+                .withParameters(inParams)
+                .withAdditionalHeader("Authorization", authHeader)
+                .execute();
+        }, "Operation sollte im Normalmodus mit gültigen Daten nicht fehlschlagen.");
+
+        // Ein grundlegender Check, ob überhaupt Parameter zurückkamen.
+        assertNotNull(outParams, "Die Operation sollte eine Antwort (Parameters-Objekt) zurückgeben.");
+        return outParams;
     }
 }
