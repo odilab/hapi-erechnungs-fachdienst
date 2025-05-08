@@ -1,6 +1,7 @@
 package ca.uhn.fhir.jpa.starter.custom.operation.submit;
 
 
+import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
@@ -25,16 +26,19 @@ public class SubmitOperationProvider implements IResourceProvider {
 	private final SubmitValidationService validationService;
 	private final DocumentProcessorService documentProcessorService;
 	private final RechnungValidator rechnungValidator;
+	private final DaoRegistry daoRegistry;
 
 	@Autowired
 	public SubmitOperationProvider(SubmitAuthorizationService authorizationService,
 									SubmitValidationService validationService,
 									DocumentProcessorService documentProcessorService,
-									RechnungValidator rechnungValidator) {
+									RechnungValidator rechnungValidator,
+									DaoRegistry daoRegistry) {
 		this.authorizationService = authorizationService;
 		this.validationService = validationService;
 		this.documentProcessorService = documentProcessorService;
 		this.rechnungValidator = rechnungValidator;
+		this.daoRegistry = daoRegistry;
 	}
 
 	@Override
@@ -70,57 +74,93 @@ public class SubmitOperationProvider implements IResourceProvider {
 		// 2. FHIR-Validierung, ggf. Speicherung & Transformation über den neuen Validator
 		RechnungValidator.ValidationAndTransformResult validationResult = rechnungValidator.validate(rechnung, modus, accessToken, anhaenge);
 
-		// // 3. Geschäftsregelvalidierung (inkl. Token-Prüfung, Größe etc.)
-		// validationService.validateBusinessRules(rechnung, anhaenge, modus);
-		// LOGGER.debug("Business rule validation successful.");
-
-		// // 4. Test-Modus prüfen
-		// if (modus != null && "test".equals(modus.getValue())) {
-		// 	LOGGER.info("Test-Modus: Nur Validierung durchgeführt.");
-		// 	Parameters response = new Parameters();
-		// 	response.addParameter().setName("status").setValue(new StringType("valid"));
-		// 	return response;
-		// }
-
-		// 5. Verarbeitung & Speicherung
 		Parameters retVal = new Parameters();
-		// boolean createEnrichedPdf = angereichertesPDF != null && angereichertesPDF.getValue();
 
-		// // Verarbeite die Rechnung
-		// LOGGER.info("Processing main invoice...");
-		// DocumentProcessorService.TokenResult rechnungResult = documentProcessorService.processDocument(rechnung, createEnrichedPdf, patientId);
-		// addTokenResultToParameters(retVal, rechnungResult, "rechnung");
-		// LOGGER.info("Main invoice processed. Token: {}", rechnungResult.token);
+		// Test-Modus prüfen: Nur Warnungen zurückgeben
+		if (modus != null && "test".equals(modus.getValueAsString())) {
+			LOGGER.info("Test-Modus aktiv: Nur Validierungswarnungen werden zurückgegeben.");
+			if (validationResult != null && validationResult.warnings != null && !validationResult.warnings.getIssue().isEmpty()) {
+				retVal.addParameter().setName("warnungen").setResource(validationResult.warnings);
+			}
+			// Im Test-Modus auch den Status "valid" zurückgeben, wenn keine Fehler aufgetreten sind (Warnungen sind ok)
+            // Dies signalisiert, dass die Validierung an sich durchlief.
+            // Wir prüfen hier nicht explizit auf Fehler, da der RechnungValidator bei Fehlern eine Exception wirft.
+            boolean hasErrors = false; // Annahme: Keine Fehler, da sonst Exception vom Validator
+            if (validationResult != null && validationResult.warnings != null) {
+                for (OperationOutcome.OperationOutcomeIssueComponent issue : validationResult.warnings.getIssue()) {
+                    if (issue.getSeverity() == OperationOutcome.IssueSeverity.ERROR || issue.getSeverity() == OperationOutcome.IssueSeverity.FATAL) {
+                        hasErrors = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasErrors) {
+                retVal.addParameter().setName("status").setValue(new StringType("valid"));
+            }
+			return retVal;
+		}
 
-		// // Verarbeite Anhänge
-		// if (anhaenge != null && !anhaenge.isEmpty()) {
-		// 	LOGGER.info("Processing {} attachments...", anhaenge.size());
-		// 	for (int i = 0; i < anhaenge.size(); i++) {
-		// 		DocumentReference anhang = anhaenge.get(i);
-		// 		LOGGER.debug("Processing attachment {}...", i + 1);
-		// 		// Anhänge werden nie angereichert, PatientId ist irrelevant
-		// 		DocumentProcessorService.TokenResult anhangResult = documentProcessorService.processDocument(anhang, false, null);
-		// 		addTokenResultToParameters(retVal, anhangResult, "anhang");
-		// 		LOGGER.debug("Attachment {} processed. Token: {}", i + 1, anhangResult.token);
-		// 	}
-		// 	LOGGER.info("All attachments processed.");
-		// }
+		// Normal-Modus oder wenn Modus nicht 'test' ist:
 
-		// Füge die erhaltenen Warnungen/Infos zur Response hinzu
+		// 1. ERG-Token (ID der transformierten Rechnung)
+		if (validationResult != null && validationResult.transformedRechnung != null && validationResult.transformedRechnung.hasId()) {
+			String ergToken = validationResult.transformedRechnung.getIdElement().getIdPart();
+			retVal.addParameter().setName("ergToken").setValue(new StringType(ergToken));
+			LOGGER.info("ERG-Token (ID: {}) zur Antwort hinzugefügt.", ergToken);
+		} else {
+			LOGGER.warn("Keine transformierte Rechnung oder keine ID in transformierter Rechnung gefunden. ERG-Token wird nicht zur Antwort hinzugefügt.");
+		}
+
+		// 2. Angereichertes PDF (optional)
+		boolean createEnrichedPdfRequested = angereichertesPDF != null && angereichertesPDF.getValue();
+		if (createEnrichedPdfRequested && validationResult != null && validationResult.transformedRechnung != null) {
+			DocumentReference transformedRechnung = validationResult.transformedRechnung;
+			String pdfBinaryUrl = null;
+			if (transformedRechnung.hasContent()) {
+				for (DocumentReference.DocumentReferenceContentComponent content : transformedRechnung.getContent()) {
+					if (content.hasAttachment() && "application/pdf".equals(content.getAttachment().getContentType()) && content.getAttachment().hasUrl()) {
+						pdfBinaryUrl = content.getAttachment().getUrl();
+						break;
+					}
+				}
+			}
+
+			if (pdfBinaryUrl != null) {
+				try {
+					// Annahme: Die URL ist eine relative ID zur Binary-Ressource, z.B. "Binary/123"
+					// Hier greifen wir direkt über das DAO zu, da wir im selben System sind.
+                    // Ein FHIR-Client-Aufruf wäre auch möglich, aber umständlicher.
+                    // Wichtig: Die ID muss korrekt extrahiert werden (z.B. nur der ID-Teil ohne "Binary/")
+                    IdType binaryId = new IdType(pdfBinaryUrl);
+                    if (!binaryId.getResourceType().equals("Binary")) {
+                         // Fallback, wenn die URL nicht standardmäßig "Binary/ID" ist, sondern nur die ID
+                        binaryId = new IdType("Binary", pdfBinaryUrl);
+                    }
+
+					Binary pdfBinary = this.daoRegistry.getResourceDao(Binary.class).read(binaryId, theRequestDetails);
+					if (pdfBinary != null) {
+						retVal.addParameter().setName("angereichertesPDF").setResource(pdfBinary);
+						LOGGER.info("Angereichertes PDF (Binary/{}) zur Antwort hinzugefügt.", pdfBinary.getIdElement().getIdPart());
+					} else {
+						LOGGER.warn("Konnte angereichertes PDF (Binary mit URL {}) nicht laden. Wird nicht zur Antwort hinzugefügt.", pdfBinaryUrl);
+					}
+				} catch (Exception e) {
+					LOGGER.error("Fehler beim Laden der angereicherten PDF-Binary von URL {}: {}", pdfBinaryUrl, e.getMessage(), e);
+                    // Fehler hier nicht die ganze Operation abbrechen lassen, nur PDF nicht hinzufügen
+				}
+			} else {
+				LOGGER.warn("Keine URL zu einem PDF-Attachment in der transformierten Rechnung gefunden. Angereichertes PDF kann nicht hinzugefügt werden.");
+			}
+		} else if (createEnrichedPdfRequested) {
+            LOGGER.warn("Angereichertes PDF angefordert, aber keine transformierte Rechnung vorhanden. PDF wird nicht hinzugefügt.");
+        }
+
+		// 3. Warnungen (immer, außer im reinen Test-Modus oben)
 		if (validationResult != null && validationResult.warnings != null && !validationResult.warnings.getIssue().isEmpty()) {
 			retVal.addParameter().setName("warnungen").setResource(validationResult.warnings);
 			LOGGER.info("Validierungswarnungen/-informationen wurden zur Antwort hinzugefügt.");
 		} else {
-             LOGGER.debug("Keine Validierungswarnungen/-informationen zum Hinzufügen zur Antwort.");
-        }
-
-        // Füge die transformierte Rechnung zur Response hinzu, falls vorhanden
-        if (validationResult != null && validationResult.transformedRechnung != null) {
-            retVal.addParameter().setName("transformedRechnung").setResource(validationResult.transformedRechnung);
-            LOGGER.info("Transformierte Rechnung (ID: {}) wurde zur Antwort hinzugefügt.", 
-                        validationResult.transformedRechnung.hasId() ? validationResult.transformedRechnung.getIdElement().getValue() : "unbekannt");
-        } else {
-            LOGGER.debug("Keine transformierte Rechnung zum Hinzufügen zur Antwort.");
+             LOGGER.debug("Keine Validierungswarnungen/-informationen zum Hinzufügen zur Antwort (Normalmodus).");
         }
 
 		// TODO: Protokollierung der Operation (ggf. in eigenem Service)
