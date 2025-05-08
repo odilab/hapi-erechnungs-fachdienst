@@ -28,6 +28,18 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         baseInParams = new Parameters();
         assertNotNull(testRechnungDocRef, "TestRechnungDocRef muss vor den Tests initialisiert sein.");
         baseInParams.addParameter().setName("rechnung").setResource(testRechnungDocRef);
+
+        // Füge Test-Anhänge hinzu, falls sie initialisiert sind
+        if (testAnhangDocRef != null) {
+            baseInParams.addParameter().setName("anhang").setResource(testAnhangDocRef);
+            LOGGER.debug("TestAnhangDocRef zu baseInParams hinzugefügt.");
+        }
+        // Wenn es einen zweiten Test-Anhang gibt und dieser verwendet werden soll:
+        // if (testAnhangDocRef2 != null) {
+        //     baseInParams.addParameter().setName("anhang").setResource(testAnhangDocRef2);
+        //     LOGGER.debug("TestAnhangDocRef2 zu baseInParams hinzugefügt.");
+        // }
+
         assertNotNull(testPatient, "TestPatient muss vor den Tests initialisiert sein.");
         assertNotNull(testPatient.getIdElement(), "TestPatient muss ein IdElement haben.");
         assertNotNull(testPatient.getIdElement().getIdPart(), "TestPatient muss eine ID haben.");
