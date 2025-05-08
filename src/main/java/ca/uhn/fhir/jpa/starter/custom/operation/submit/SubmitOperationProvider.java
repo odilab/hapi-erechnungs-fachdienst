@@ -68,7 +68,7 @@ public class SubmitOperationProvider implements IResourceProvider {
 		LOGGER.debug("Authorization successful for user with profession: {}", accessToken.getProfession());
 
 		// 2. FHIR-Validierung, ggf. Speicherung & Transformation über den neuen Validator
-		RechnungValidator.ValidationAndTransformResult validationResult = rechnungValidator.validate(rechnung, modus, accessToken);
+		RechnungValidator.ValidationAndTransformResult validationResult = rechnungValidator.validate(rechnung, modus, accessToken, anhaenge);
 
 		// // 3. Geschäftsregelvalidierung (inkl. Token-Prüfung, Größe etc.)
 		// validationService.validateBusinessRules(rechnung, anhaenge, modus);
