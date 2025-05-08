@@ -135,15 +135,13 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
     void testSubmitOperation_NormalMode_ReturnsTransformedRechnung() {
         String authHeader = "Bearer " + getValidAccessToken("SMCB_KRANKENHAUS");
 
-        // Kopiere die Basisparameter, um sie nicht für andere Tests zu ändern
         Parameters inParams = baseInParams.copy(); 
-        // Füge den Modus 'normal' hinzu
         inParams.addParameter("modus", new CodeType("normal"));
+        // Fordere auch das angereicherte PDF an, um diesen Zweig zu testen
+        inParams.addParameter("angereichertesPDF", new BooleanType(true)); 
 
-        // Führe die Operation über die Helfermethode aus
         Parameters outParams = executeSuccessfulSubmitOperation(testPatient.getIdElement(), inParams, authHeader);
 
-        // ---- Begin Logik, die vorher teilweise in der Helfermethode war / angepasst wurde ----
         assertNotNull(outParams, "Die Operation sollte eine Antwort zurückgeben.");
 
         // Prüfe auf den (optionalen) Warnungen-Parameter
@@ -156,14 +154,36 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
              LOGGER.info("Kein Warnungen-Parameter gefunden (was ok ist).");
         }
 
-        // Prüfe auf den MUSS-Parameter transformedRechnung
-        Parameters.ParametersParameterComponent transformedParam = outParams.getParameter("transformedRechnung");
-        assertNotNull(transformedParam, "Der transformedRechnung-Parameter muss im Normalmodus vorhanden sein.");
-        assertNotNull(transformedParam.getResource(), "Der transformedRechnung-Parameter muss eine Ressource enthalten.");
-        assertTrue(transformedParam.getResource() instanceof DocumentReference, "Die Ressource von transformedRechnung muss eine DocumentReference sein.");
+        // 1. ERG-Token extrahieren
+        Parameters.ParametersParameterComponent ergTokenParam = outParams.getParameter("ergToken");
+        assertNotNull(ergTokenParam, "Der ergToken-Parameter muss im Normalmodus vorhanden sein.");
+        assertTrue(ergTokenParam.getValue() instanceof StringType, "ergToken sollte ein StringType sein.");
+        String ergToken = ((StringType) ergTokenParam.getValue()).getValue();
+        assertNotNull(ergToken, "Der Wert des ergToken darf nicht null sein.");
+        assertFalse(ergToken.isEmpty(), "Der Wert des ergToken darf nicht leer sein.");
+        LOGGER.info("ERG-Token erfolgreich extrahiert: {}", ergToken);
 
-        DocumentReference transformedDocRef = (DocumentReference) transformedParam.getResource();
-        LOGGER.info("TransformedRechnung-Parameter gefunden mit ID: {}", transformedDocRef.hasId() ? transformedDocRef.getIdElement().getValue() : "KEINE ID (Fehler!)");
+        // 2. Lade die transformierte DocumentReference über den ERG-Token
+        DocumentReference transformedDocRef = client.read()
+            .resource(DocumentReference.class)
+            .withId(ergToken) // Verwende den ergToken als ID
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+        assertNotNull(transformedDocRef, "Konnte die transformierte DocumentReference mit ID '" + ergToken + "' nicht laden.");
+        LOGGER.info("TransformedRechnung (ID: {}) erfolgreich über ERG-Token geladen.", transformedDocRef.getIdElement().getIdPart());
+        
+        // 3. Prüfe auf optionales angereichertes PDF
+        Parameters.ParametersParameterComponent angereichertesPdfParam = outParams.getParameter("angereichertesPDF");
+        if (inParams.getParameterBool("angereichertesPDF")) { // Nur prüfen, wenn es angefordert wurde
+            assertNotNull(angereichertesPdfParam, "Der angereichertesPDF-Parameter sollte vorhanden sein, wenn angefordert.");
+            assertTrue(angereichertesPdfParam.getResource() instanceof Binary, "angereichertesPDF sollte eine Binary-Ressource sein.");
+            Binary pdfBinary = (Binary) angereichertesPdfParam.getResource();
+            assertTrue(pdfBinary.hasData(), "Die angereicherte PDF-Binary sollte Daten enthalten.");
+            LOGGER.info("Angereichertes PDF als Binary-Parameter erfolgreich gefunden.");
+            // Die eigentliche PDF-Speicherung und Inhaltsprüfung erfolgt weiter unten oder in separaten Tests
+        } else {
+            assertNull(angereichertesPdfParam, "Der angereichertesPDF-Parameter sollte NICHT vorhanden sein, wenn nicht angefordert.");
+        }
 
         // Gib die transformierte Rechnung zur Überprüfung in der Konsole aus
         String transformedJson = ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(transformedDocRef);
@@ -198,8 +218,6 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         
         assertNotNull(originalDocRef, "Die ursprüngliche DocumentReference konnte nicht geladen werden.");
         LOGGER.info("Ursprüngliche DocumentReference erfolgreich geladen mit ID: {}", originalDocRef.getIdElement().getValue());
-        // ---- Ende Logik, die vorher teilweise in der Helfermethode war / angepasst wurde ----
-
 
         // --- Vergleiche Felder zwischen originalDocRef und transformedDocRef --- 
 
@@ -301,31 +319,43 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         Parameters inParams = baseInParams.copy(); // baseInParams enthält bereits testAnhangDocRef
         inParams.addParameter("modus", new CodeType("normal"));
 
-        // 1. Führe die Operation erfolgreich aus
         Parameters outParams = executeSuccessfulSubmitOperation(testPatient.getIdElement(), inParams, authHeader);
 
-        // 2. Extrahiere die transformierte Hauptrechnung
-        Parameters.ParametersParameterComponent transformedParam = outParams.getParameter("transformedRechnung");
-        assertNotNull(transformedParam, "Der transformedRechnung-Parameter muss vorhanden sein.");
-        DocumentReference transformedHauptRechnung = (DocumentReference) transformedParam.getResource();
-        assertNotNull(transformedHauptRechnung, "Die transformierte Hauptrechnung darf nicht null sein.");
+        Parameters.ParametersParameterComponent ergTokenParam = outParams.getParameter("ergToken");
+        assertNotNull(ergTokenParam, "Der ergToken-Parameter muss vorhanden sein.");
+        String ergToken = ((StringType) ergTokenParam.getValue()).getValue();
+        assertNotNull(ergToken, "ERG-Token darf nicht null sein.");
+
+        DocumentReference transformedHauptRechnung = client.read()
+            .resource(DocumentReference.class)
+            .withId(ergToken)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+        assertNotNull(transformedHauptRechnung, "Die transformierte Hauptrechnung (ID: " + ergToken + ") darf nicht null sein.");
         LOGGER.info("TransformedHauptRechnung ID: {}", transformedHauptRechnung.getIdElement().getIdPart());
+        // Logge die gesamte transformierte Rechnung, um den Kontext zu sehen
+        LOGGER.info("Komplette transformierte Hauptrechnung: {}", ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(transformedHauptRechnung));
 
         // 3. Finde die Referenz zur Anhang-DocumentReference im context.related
         assertTrue(transformedHauptRechnung.hasContext(), "TransformedHauptRechnung sollte einen Context haben.");
         assertTrue(transformedHauptRechnung.getContext().hasRelated(), "Context sollte related Einträge haben.");
 
         String anhangDocRefId = null;
+        int documentReferenceRelatedCount = 0;
         for (Reference relatedRef : transformedHauptRechnung.getContext().getRelated()) {
+            LOGGER.debug("Prüfe relatedRef: type='{}', reference='{}'", relatedRef.getType(), relatedRef.getReference());
             if ("DocumentReference".equals(relatedRef.getType()) && relatedRef.hasReference()) {
-                // Annahme: Die erste gefundene DocumentReference-Referenz ist der gesuchte Anhang.
-                // Wenn mehrere Anhänge möglich sind, muss dies ggf. präziser gesucht werden.
                 anhangDocRefId = relatedRef.getReference();
-                break;
+                documentReferenceRelatedCount++;
+                LOGGER.info("Potentielle Anhang-DocumentReference-Referenz im context.related gefunden: {}", anhangDocRefId);
+                // Wenn wir nur einen Anhang erwarten, können wir hier breaken.
+                // Falls mehrere möglich sind und wir einen bestimmten suchen, braucht es mehr Logik.
+                break; 
             }
         }
+        assertEquals(1, documentReferenceRelatedCount, "Es sollte genau eine DocumentReference im context.related für den Anhang geben.");
         assertNotNull(anhangDocRefId, "Keine Referenz zu einer Anhang-DocumentReference im context.related gefunden.");
-        LOGGER.info("Referenz zur Anhang-DocumentReference gefunden: {}", anhangDocRefId);
+        LOGGER.info("Referenz zur Anhang-DocumentReference final ausgewählt: {}", anhangDocRefId);
 
         // 4. Lade die Anhang-DocumentReference vom Server
         DocumentReference anhangDocRefVomServer = client.read()
