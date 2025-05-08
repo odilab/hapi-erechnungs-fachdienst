@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import java.util.List;
-import ca.uhn.fhir.jpa.starter.custom.operation.submit.validation.RechnungValidator;
 
 @Component
 public class SubmitOperationProvider implements IResourceProvider {
@@ -23,21 +22,15 @@ public class SubmitOperationProvider implements IResourceProvider {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SubmitOperationProvider.class);
 
 	private final SubmitAuthorizationService authorizationService;
-	private final SubmitValidationService validationService;
-	private final DocumentProcessorService documentProcessorService;
-	private final RechnungValidator rechnungValidator;
+	private final RechnungProcessingService rechnungProcessingService;
 	private final DaoRegistry daoRegistry;
 
 	@Autowired
 	public SubmitOperationProvider(SubmitAuthorizationService authorizationService,
-									SubmitValidationService validationService,
-									DocumentProcessorService documentProcessorService,
-									RechnungValidator rechnungValidator,
+									RechnungProcessingService rechnungProcessingService,
 									DaoRegistry daoRegistry) {
 		this.authorizationService = authorizationService;
-		this.validationService = validationService;
-		this.documentProcessorService = documentProcessorService;
-		this.rechnungValidator = rechnungValidator;
+		this.rechnungProcessingService = rechnungProcessingService;
 		this.daoRegistry = daoRegistry;
 	}
 
@@ -71,8 +64,8 @@ public class SubmitOperationProvider implements IResourceProvider {
 		AccessToken accessToken = authorizationService.authorizeRequest(theRequestDetails);
 		LOGGER.debug("Authorization successful for user with profession: {}", accessToken.getProfession());
 
-		// 2. FHIR-Validierung, ggf. Speicherung & Transformation über den neuen Validator
-		RechnungValidator.ValidationAndTransformResult validationResult = rechnungValidator.validate(rechnung, modus, accessToken, anhaenge);
+		// 2. FHIR-Validierung, ggf. Speicherung & Transformation über den neuen Service
+		ValidationAndTransformResult validationResult = this.rechnungProcessingService.validate(rechnung, modus, accessToken, anhaenge);
 
 		Parameters retVal = new Parameters();
 
@@ -160,7 +153,7 @@ public class SubmitOperationProvider implements IResourceProvider {
 			retVal.addParameter().setName("warnungen").setResource(validationResult.warnings);
 			LOGGER.info("Validierungswarnungen/-informationen wurden zur Antwort hinzugefügt.");
 		} else {
-             LOGGER.debug("Keine Validierungswarnungen/-informationen zum Hinzufügen zur Antwort (Normalmodus).");
+						LOGGER.debug("Keine Validierungswarnungen/-informationen zum Hinzufügen zur Antwort (Normalmodus).");
         }
 
 		// TODO: Protokollierung der Operation (ggf. in eigenem Service)
@@ -170,15 +163,4 @@ public class SubmitOperationProvider implements IResourceProvider {
 		return retVal;
 	}
 
-	// private void addTokenResultToParameters(Parameters parameters, DocumentProcessorService.TokenResult result, String documentType) {
-	// 	Parameters.ParametersParameterComponent tokenParam = parameters.addParameter().setName("token"); // Gemäß Spec immer 'token'
-	// 	tokenParam.addPart().setName("id").setValue(new StringType(result.token));
-	// 	tokenParam.addPart().setName("docRef").setValue(result.identifier); // Verwende den generierten Identifier
-
-	// 	// Füge das angereicherte PDF hinzu, falls vorhanden (nur für Hauptrechnung möglich)
-	// 	if (result.enrichedPdf != null) {
-	// 		tokenParam.addPart().setName("angereichertesPDF").setResource(result.enrichedPdf);
-	// 		LOGGER.debug("Enriched PDF added to response for {} token {}", documentType, result.token);
-	// 	}
-	// }
 }
