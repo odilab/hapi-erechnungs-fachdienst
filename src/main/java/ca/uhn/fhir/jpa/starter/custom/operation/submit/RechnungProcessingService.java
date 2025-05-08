@@ -81,14 +81,14 @@ public class RechnungProcessingService {
 
     @Autowired
     public RechnungProcessingService(CustomValidator customValidator, 
-                                   DaoRegistry daoRegistry, 
-                                   TokenGenerationService tokenGenerationService, 
-                                   PdfEnrichmentService pdfEnrichmentService, 
-                                   FhirContext ctx, 
-                                   SignatureService signatureService, 
-                                   FhirSignatureService fhirSignatureService,
-                                   TransformedRechnungMetadataHandler metadataHandler,
-                                   AttachmentProcessingService attachmentProcessingService) { // Injizieren
+                                DaoRegistry daoRegistry, 
+                                TokenGenerationService tokenGenerationService, 
+                                PdfEnrichmentService pdfEnrichmentService, 
+                                FhirContext ctx, 
+                                SignatureService signatureService, 
+                                FhirSignatureService fhirSignatureService,
+                                TransformedRechnungMetadataHandler metadataHandler,
+                                AttachmentProcessingService attachmentProcessingService) { // Injizieren
         this.customValidator = customValidator;
         this.daoRegistry = daoRegistry;
         this.tokenGenerationService = tokenGenerationService;
