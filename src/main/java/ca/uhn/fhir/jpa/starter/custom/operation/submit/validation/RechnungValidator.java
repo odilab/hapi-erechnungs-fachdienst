@@ -394,6 +394,126 @@ public class RechnungValidator {
                         }
                     }
 
+                    // ---------- NEUE POSITION für Anhangverarbeitung ----------
+                    if (anhaenge != null && !anhaenge.isEmpty()) {
+                        LOGGER.info("Starte Verarbeitung für {} Anhänge im Modus '{}'.", anhaenge.size(), modusValue);
+                        for (int i = 0; i < anhaenge.size(); i++) {
+                            DocumentReference anhangDocRef = anhaenge.get(i);
+                            String anhangIdLog = anhangDocRef.hasId() ? anhangDocRef.getIdElement().getValue() : "Anhang #" + (i+1) + " (ohne ID)";
+                            List<SingleValidationMessage> attachmentSpecificWarnings = new ArrayList<>();
+                            DocumentReference savedAnhangDocRef = null;
+            
+                            try {
+                                LOGGER.debug("Validiere Anhang: {}", anhangIdLog);
+                                ValidationResult anhangValidationResult = customValidator.validateAndReturnResult(anhangDocRef);
+                                handleValidationResult(anhangValidationResult, attachmentSpecificWarnings, "Anhang " + anhangIdLog);
+            
+                                // Kopie für Modifikationen erstellen
+                                DocumentReference anhangToProcess = anhangDocRef.copy();
+            
+                                // Attachments im Anhang als Binary speichern und URL ersetzen
+                                if (anhangToProcess.hasContent()) {
+                                    for (DocumentReference.DocumentReferenceContentComponent content : anhangToProcess.getContent()) {
+                                        if (content.hasAttachment() && content.getAttachment().hasData()) {
+                                            Attachment attachment = content.getAttachment();
+                                            byte[] attachmentData = attachment.getData(); // Annahme: data ist byte[]
+                                            String attachmentContentType = attachment.hasContentType() ? attachment.getContentType() : "application/octet-stream";
+
+                                            // Daten als Base64 interpretieren, wenn es ein String ist (konsistent mit Hauptrechnungs-PDF/Invoice Handling)
+                                            // Dies ist eine Annahme, ggf. anpassen, wenn .data immer byte[] ist.
+                                            if (attachment.getDataElement() instanceof org.hl7.fhir.r4.model.Base64BinaryType && attachment.getDataElement().hasValue()) {
+                                                 // Bereits byte[], tun nichts extra. Wenn es ein StringType wäre, müssten wir Base64.getDecoder().decode verwenden.
+                                                 // Für den Moment gehen wir davon aus, dass wenn .getData() genutzt wird, es byte[] ist.
+                                                 // Wenn es explizit Base64 sein soll, muss der Aufrufer es als Base64Type setzen oder wir müssen hier dekodieren.
+                                            } else {
+                                                 LOGGER.warn("Anhang {} Attachment-Daten sind nicht vom Typ Base64BinaryType oder haben keinen Wert. Überspringe eventuelle Dekodierung.", anhangIdLog);
+                                            }
+
+                                            if (attachmentData.length > MAX_ATTACHMENT_SIZE_BYTES) {
+                                                LOGGER.error("Anhang {} Attachment-Daten überschreiten die maximale Größe von {} Bytes.", anhangIdLog, MAX_ATTACHMENT_SIZE_BYTES);
+                                                throw new UnprocessableEntityException("Anhang " + anhangIdLog + " Attachment überschreitet die maximale Größe von 10MB.");
+                                            }
+
+                                            LOGGER.debug("Speichere Attachment-Daten ({} Bytes, Typ: {}) aus Anhang {} als Binary.", attachmentData.length, attachmentContentType, anhangIdLog);
+                                            Binary binary = new Binary();
+                                            binary.setContentType(attachmentContentType);
+                                            binary.setData(attachmentData);
+                                            DaoMethodOutcome binaryOutcome = daoRegistry.getResourceDao(Binary.class).create(binary);
+
+                                            if (binaryOutcome.getCreated() != null && binaryOutcome.getCreated()) {
+                                                String binaryUrl = binaryOutcome.getId().toUnqualifiedVersionless().getValue();
+                                                attachment.setData(null);
+                                                attachment.setUrl(binaryUrl);
+                                                LOGGER.info("Attachment-Daten aus Anhang {} als Binary ({}) gespeichert und URL in Anhang gesetzt.", anhangIdLog, binaryUrl);
+                                            } else {
+                                                LOGGER.error("Fehler beim Speichern der Attachment-Daten aus Anhang {} als Binary.", anhangIdLog);
+                                                throw new InternalErrorException("Konnte Attachment-Daten aus Anhang " + anhangIdLog + " nicht als Binary speichern.");
+                                            }
+                                        }
+                                    }
+                                }
+            
+                                // Modifizierte Anhang-DocumentReference speichern
+                                LOGGER.debug("Speichere verarbeitete Anhang-DocumentReference: {}", anhangIdLog);
+                                DaoMethodOutcome savedAnhangOutcome = daoRegistry.getResourceDao(DocumentReference.class).create(anhangToProcess);
+                                if (savedAnhangOutcome.getCreated() != null && savedAnhangOutcome.getCreated()) {
+                                    savedAnhangDocRef = (DocumentReference) savedAnhangOutcome.getResource();
+                                    LOGGER.info("Anhang-DocumentReference {} erfolgreich gespeichert mit ID: {}", anhangIdLog, savedAnhangDocRef.getIdElement().getValue());
+                                } else {
+                                    LOGGER.error("Fehler beim Speichern der Anhang-DocumentReference {}. Outcome: {}", anhangIdLog, savedAnhangOutcome);
+                                    throw new InternalErrorException("Konnte Anhang-DocumentReference " + anhangIdLog + " nicht speichern.");
+                                }
+            
+                            } catch (UnprocessableEntityException | InternalErrorException e) {
+                                LOGGER.error("Verarbeitungsfehler bei Anhang {}: {}", anhangIdLog, e.getMessage());
+                                // Füge den Fehler zum Haupt-OperationOutcome hinzu oder werfe direkt?
+                                // Fürs Erste: Fehlerhafte Anhänge werden nicht in die Results aufgenommen und nicht referenziert.
+                                // Man könnte hier auch eine spezielle Fehlerstruktur im ProcessedAttachmentResult einführen.
+                                SingleValidationMessage errorMsg = new SingleValidationMessage();
+                                errorMsg.setSeverity(ResultSeverityEnum.ERROR);
+                                errorMsg.setMessage("Fehler bei Verarbeitung von Anhang " + anhangIdLog + ": " + e.getMessage());
+                                errorMsg.setLocationString(anhangDocRef.fhirType() + (anhangDocRef.hasId() ? "/"+anhangDocRef.getIdPart() : ""));
+                                allWarningsAndInfos.add(errorMsg); // Zum globalen Report hinzufügen
+                                continue; // Nächsten Anhang bearbeiten
+                            } catch (Exception e) {
+                                LOGGER.error("Unerwarteter Fehler bei Verarbeitung von Anhang {}.", anhangIdLog, e);
+                                SingleValidationMessage errorMsg = new SingleValidationMessage();
+                                errorMsg.setSeverity(ResultSeverityEnum.FATAL);
+                                errorMsg.setMessage("Unerwarteter Fehler bei Verarbeitung von Anhang " + anhangIdLog + ": " + e.getMessage());
+                                errorMsg.setLocationString(anhangDocRef.fhirType() + (anhangDocRef.hasId() ? "/"+anhangDocRef.getIdPart() : ""));
+                                allWarningsAndInfos.add(errorMsg); // Zum globalen Report hinzufügen
+                                continue; // Nächsten Anhang bearbeiten
+                            }
+            
+                            OperationOutcome anhangWarningsOutcome = null;
+                            if (!attachmentSpecificWarnings.isEmpty()) {
+                                anhangWarningsOutcome = createOperationOutcomeFromMessages(attachmentSpecificWarnings);
+                            }
+                            if (savedAnhangDocRef != null) { // Nur erfolgreich gespeicherte Anhänge hinzufügen
+                                processedAttachmentResults.add(new ProcessedAttachmentResult(savedAnhangDocRef, anhangWarningsOutcome));
+                            }
+                        }
+                        LOGGER.info("Verarbeitung von {} Anhängen beendet.", anhaenge.size());
+                    }
+            
+                    // Referenzen zu verarbeiteten Anhängen in transformierter Hauptrechnung hinzufügen
+                    if (!processedAttachmentResults.isEmpty()) {
+                        DocumentReference.DocumentReferenceContextComponent context = transformedRechnung.getContext();
+                        if (!transformedRechnung.hasContext()) { 
+                            context = new DocumentReference.DocumentReferenceContextComponent();
+                            transformedRechnung.setContext(context);
+                        }
+                        for (ProcessedAttachmentResult processedAttachment : processedAttachmentResults) {
+                            if (processedAttachment.savedAttachmentDocumentReference != null && processedAttachment.savedAttachmentDocumentReference.hasId()) {
+                                Reference anhangRef = new Reference(processedAttachment.savedAttachmentDocumentReference.getIdElement().toUnqualifiedVersionless());
+                                anhangRef.setType("DocumentReference");
+                                context.addRelated(anhangRef);
+                                LOGGER.info("Referenz zu Anhang {} zur transformierten Hauptrechnung hinzugefügt.", processedAttachment.savedAttachmentDocumentReference.getIdElement().getValue());
+                            }
+                        }
+                    }
+                    // ---------- ENDE NEUE POSITION für Anhangverarbeitung ----------
+
                     // Signatur für die transformierte Rechnung (wenn anwendbar)
                     boolean isRechnungType = rechnung.getType() != null &&
                             rechnung.getType().getCoding().stream().anyMatch(coding ->
@@ -421,6 +541,16 @@ public class RechnungValidator {
                     // Speichere die transformierte DocumentReference via UPDATE
                     LOGGER.info("Speichere transformierte DocumentReference mit ID {} (relatesTo {}).", generatedTokenId, originalDocRefId);
                     try {
+                        // DEBUG: Logge den Kontext direkt vor dem Speichern
+                        if (transformedRechnung.hasContext() && transformedRechnung.getContext().hasRelated()) {
+                            LOGGER.info("DEBUG: finalTransformedRechnung.context.related VOR UPDATE (Anzahl: {}):", transformedRechnung.getContext().getRelated().size());
+                            for (Reference r : transformedRechnung.getContext().getRelated()) {
+                                LOGGER.info("DEBUG: related item: {} - {}", r.getType(), r.getReference());
+                            }
+                        } else {
+                            LOGGER.info("DEBUG: finalTransformedRechnung hat keinen Context oder keine related Einträge VOR UPDATE.");
+                        }
+
                         DaoMethodOutcome transformedDocRefOutcome = daoRegistry.getResourceDao(DocumentReference.class).update(transformedRechnung);
                         if (transformedDocRefOutcome.getId() != null && generatedTokenId.equals(transformedDocRefOutcome.getId().getIdPart())) {
                             LOGGER.info("Transformierte DocumentReference erfolgreich mit ID {} aktualisiert/gespeichert.", transformedDocRefOutcome.getId().getValue());
@@ -436,6 +566,7 @@ public class RechnungValidator {
 
                 } else {
                     LOGGER.warn("Speichern der initialen DocumentReference hat kein 'created=true' zurückgegeben. Outcome: {}", docRefOutcome);
+                    // KEINE Anhangverarbeitung, da die initiale Rechnung nicht gespeichert wurde
                 }
             } catch (Exception e) {
                 LOGGER.error("Fehler beim Speichern der initialen DocumentReference (Rechnung) in der Datenbank.", e);
@@ -443,6 +574,7 @@ public class RechnungValidator {
             }
         } else {
             LOGGER.info("Modus 'test': Nur Validierung durchgeführt, kein Speichern oder Transformieren.");
+            // Im Test-Modus KEINE Anhangverarbeitung durchführen, die Speichern erfordert
         }
 
         // 4. Finale Warnungen/Infos sammeln und Ergebnis zurückgeben
@@ -454,130 +586,9 @@ public class RechnungValidator {
             LOGGER.debug("Keine Validierungswarnungen oder -informationen für Hauptrechnung gefunden.");
         }
 
-        // 5. Anhänge verarbeiten (nur im 'normal'-Modus)
-        String modusValueForAttachments = (modus != null) ? modus.getValueAsString() : "normal";
-        if ("normal".equalsIgnoreCase(modusValueForAttachments) && anhaenge != null && !anhaenge.isEmpty()) {
-            LOGGER.info("Starte Verarbeitung für {} Anhänge im Modus '{}'.", anhaenge.size(), modusValueForAttachments);
-            for (int i = 0; i < anhaenge.size(); i++) {
-                DocumentReference anhangDocRef = anhaenge.get(i);
-                String anhangIdLog = anhangDocRef.hasId() ? anhangDocRef.getIdElement().getValue() : "Anhang #" + (i+1) + " (ohne ID)";
-                List<SingleValidationMessage> attachmentSpecificWarnings = new ArrayList<>();
-                DocumentReference savedAnhangDocRef = null;
-
-                try {
-                    LOGGER.debug("Validiere Anhang: {}", anhangIdLog);
-                    ValidationResult anhangValidationResult = customValidator.validateAndReturnResult(anhangDocRef);
-                    handleValidationResult(anhangValidationResult, attachmentSpecificWarnings, "Anhang " + anhangIdLog);
-
-                    // Kopie für Modifikationen erstellen, um das Original nicht zu verändern, falls es von außerhalb kommt
-                    DocumentReference anhangToProcess = anhangDocRef.copy();
-
-                    // Attachments im Anhang als Binary speichern und URL ersetzen
-                    if (anhangToProcess.hasContent()) {
-                        for (DocumentReference.DocumentReferenceContentComponent content : anhangToProcess.getContent()) {
-                            if (content.hasAttachment() && content.getAttachment().hasData()) {
-                                Attachment attachment = content.getAttachment();
-                                byte[] attachmentData = attachment.getData(); // Annahme: data ist byte[]
-                                String attachmentContentType = attachment.hasContentType() ? attachment.getContentType() : "application/octet-stream";
-
-                                // Daten als Base64 interpretieren, wenn es ein String ist (konsistent mit Hauptrechnungs-PDF/Invoice Handling)
-                                // Dies ist eine Annahme, ggf. anpassen, wenn .data immer byte[] ist.
-                                if (attachment.getDataElement() instanceof org.hl7.fhir.r4.model.Base64BinaryType && attachment.getDataElement().hasValue()) {
-                                     // Bereits byte[], tun nichts extra. Wenn es ein StringType wäre, müssten wir Base64.getDecoder().decode verwenden.
-                                     // Für den Moment gehen wir davon aus, dass wenn .getData() genutzt wird, es byte[] ist.
-                                     // Wenn es explizit Base64 sein soll, muss der Aufrufer es als Base64Type setzen oder wir müssen hier dekodieren.
-                                } else {
-                                     LOGGER.warn("Anhang {} Attachment-Daten sind nicht vom Typ Base64BinaryType oder haben keinen Wert. Überspringe eventuelle Dekodierung.", anhangIdLog);
-                                }
-
-                                if (attachmentData.length > MAX_ATTACHMENT_SIZE_BYTES) {
-                                    LOGGER.error("Anhang {} Attachment-Daten überschreiten die maximale Größe von {} Bytes.", anhangIdLog, MAX_ATTACHMENT_SIZE_BYTES);
-                                    throw new UnprocessableEntityException("Anhang " + anhangIdLog + " Attachment überschreitet die maximale Größe von 10MB.");
-                                }
-
-                                LOGGER.debug("Speichere Attachment-Daten ({} Bytes, Typ: {}) aus Anhang {} als Binary.", attachmentData.length, attachmentContentType, anhangIdLog);
-                                Binary binary = new Binary();
-                                binary.setContentType(attachmentContentType);
-                                binary.setData(attachmentData);
-                                DaoMethodOutcome binaryOutcome = daoRegistry.getResourceDao(Binary.class).create(binary);
-
-                                if (binaryOutcome.getCreated() != null && binaryOutcome.getCreated()) {
-                                    String binaryUrl = binaryOutcome.getId().toUnqualifiedVersionless().getValue();
-                                    attachment.setData(null);
-                                    attachment.setUrl(binaryUrl);
-                                    LOGGER.info("Attachment-Daten aus Anhang {} als Binary ({}) gespeichert und URL in Anhang gesetzt.", anhangIdLog, binaryUrl);
-                                } else {
-                                    LOGGER.error("Fehler beim Speichern der Attachment-Daten aus Anhang {} als Binary.", anhangIdLog);
-                                    throw new InternalErrorException("Konnte Attachment-Daten aus Anhang " + anhangIdLog + " nicht als Binary speichern.");
-                                }
-                            }
-                        }
-                    }
-
-                    // Modifizierte Anhang-DocumentReference speichern
-                    LOGGER.debug("Speichere verarbeitete Anhang-DocumentReference: {}", anhangIdLog);
-                    DaoMethodOutcome savedAnhangOutcome = daoRegistry.getResourceDao(DocumentReference.class).create(anhangToProcess);
-                    if (savedAnhangOutcome.getCreated() != null && savedAnhangOutcome.getCreated()) {
-                        savedAnhangDocRef = (DocumentReference) savedAnhangOutcome.getResource();
-                        LOGGER.info("Anhang-DocumentReference {} erfolgreich gespeichert mit ID: {}", anhangIdLog, savedAnhangDocRef.getIdElement().getValue());
-                    } else {
-                        LOGGER.error("Fehler beim Speichern der Anhang-DocumentReference {}. Outcome: {}", anhangIdLog, savedAnhangOutcome);
-                        throw new InternalErrorException("Konnte Anhang-DocumentReference " + anhangIdLog + " nicht speichern.");
-                    }
-
-                } catch (UnprocessableEntityException | InternalErrorException e) {
-                    LOGGER.error("Verarbeitungsfehler bei Anhang {}: {}", anhangIdLog, e.getMessage());
-                    // Füge den Fehler zum Haupt-OperationOutcome hinzu oder werfe direkt?
-                    // Fürs Erste: Fehlerhafte Anhänge werden nicht in die Results aufgenommen und nicht referenziert.
-                    // Man könnte hier auch eine spezielle Fehlerstruktur im ProcessedAttachmentResult einführen.
-                    SingleValidationMessage errorMsg = new SingleValidationMessage();
-                    errorMsg.setSeverity(ResultSeverityEnum.ERROR);
-                    errorMsg.setMessage("Fehler bei Verarbeitung von Anhang " + anhangIdLog + ": " + e.getMessage());
-                    errorMsg.setLocationString(anhangDocRef.fhirType() + (anhangDocRef.hasId() ? "/"+anhangDocRef.getIdPart() : ""));
-                    allWarningsAndInfos.add(errorMsg); // Zum globalen Report hinzufügen
-                    continue; // Nächsten Anhang bearbeiten
-                } catch (Exception e) {
-                    LOGGER.error("Unerwarteter Fehler bei Verarbeitung von Anhang {}.", anhangIdLog, e);
-                    SingleValidationMessage errorMsg = new SingleValidationMessage();
-                    errorMsg.setSeverity(ResultSeverityEnum.FATAL);
-                    errorMsg.setMessage("Unerwarteter Fehler bei Verarbeitung von Anhang " + anhangIdLog + ": " + e.getMessage());
-                    errorMsg.setLocationString(anhangDocRef.fhirType() + (anhangDocRef.hasId() ? "/"+anhangDocRef.getIdPart() : ""));
-                    allWarningsAndInfos.add(errorMsg); // Zum globalen Report hinzufügen
-                    continue; // Nächsten Anhang bearbeiten
-                }
-
-                OperationOutcome anhangWarningsOutcome = null;
-                if (!attachmentSpecificWarnings.isEmpty()) {
-                    anhangWarningsOutcome = createOperationOutcomeFromMessages(attachmentSpecificWarnings);
-                }
-                if (savedAnhangDocRef != null) { // Nur erfolgreich gespeicherte Anhänge hinzufügen
-                    processedAttachmentResults.add(new ProcessedAttachmentResult(savedAnhangDocRef, anhangWarningsOutcome));
-                }
-            }
-            LOGGER.info("Verarbeitung von {} Anhängen beendet.", anhaenge.size());
-        }
-
-        // 6. Referenzen zu verarbeiteten Anhängen in transformierter Hauptrechnung hinzufügen (wenn Hauptrechnung existiert)
-        if (finalTransformedRechnung != null && !processedAttachmentResults.isEmpty()) {
-            DocumentReference.DocumentReferenceContextComponent context = finalTransformedRechnung.getContext();
-            if (!finalTransformedRechnung.hasContext()) { 
-                context = new DocumentReference.DocumentReferenceContextComponent();
-                finalTransformedRechnung.setContext(context);
-            }
-            // Bestehende Related-Einträge NICHT löschen, da der Patienten-Eintrag erhalten bleiben soll.
-            // context.getRelated().clear(); 
-
-            for (ProcessedAttachmentResult processedAttachment : processedAttachmentResults) {
-                if (processedAttachment.savedAttachmentDocumentReference != null && processedAttachment.savedAttachmentDocumentReference.hasId()) {
-                    Reference anhangRef = new Reference(processedAttachment.savedAttachmentDocumentReference.getIdElement().toUnqualifiedVersionless());
-                    anhangRef.setType("DocumentReference"); // Typ anpassen, falls spezifischer Typ für Anhänge existiert
-                    // Optional: anhangRef.setDisplay(...)
-                    context.addRelated(anhangRef);
-                    LOGGER.info("Referenz zu Anhang {} zur transformierten Hauptrechnung hinzugefügt.", processedAttachment.savedAttachmentDocumentReference.getIdElement().getValue());
-                }
-            }
-        }
-
+        // Rückgabe des Ergebnisses (finalTransformedRechnung hat jetzt ggf. die Anhangs-Refs)
+        // Beachte: processedAttachmentResults wird hier übergeben, auch wenn es leer sein könnte,
+        // aber die Referenzen darauf wurden bereits VOR dem Speichern in finalTransformedRechnung eingefügt.
         return new ValidationAndTransformResult(finalWarningsOutcome, finalTransformedRechnung, processedAttachmentResults);
     }
 
