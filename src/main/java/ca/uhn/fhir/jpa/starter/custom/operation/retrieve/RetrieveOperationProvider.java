@@ -362,8 +362,84 @@ public class RetrieveOperationProvider implements IResourceProvider {
 
         // 1. Metadaten-DocumentReference hinzufügen
         DocumentReference metadataDocRef = originalDocRef.copy();
+        
+        // --- BEGINN: Hinzufügen der Markierung-Extension ---
+        final String MARKIERUNG_MAIN_EXTENSION_URL = "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung";
+        final String SUB_EXT_MARKIERUNG_URL = "markierung";
+        final String SUB_EXT_GELESEN_URL = "gelesen";
+        final String SUB_EXT_DETAILS_URL = "details";
+        final String SUB_EXT_ZEITPUNKT_URL = "zeitpunkt";
+        // Annahme: Das ValueSet 'erg-dokument-artderarchivierung-vs' enthält den Code 'gelesen' und definiert dessen System.
+        // Wir verwenden hier die ValueSet-URL als System, was eine gängige Praxis ist, wenn kein spezifisches CodeSystem explizit ist.
+        final String MARKIERUNG_CODING_SYSTEM_FOR_GELESEN = "https://gematik.de/fhir/erg/ValueSet/erg-dokument-artderarchivierung-vs";
+
+        // Hole oder erstelle die Haupt-Extension
+        Extension markierungMainExtension = metadataDocRef.getExtensionsByUrl(MARKIERUNG_MAIN_EXTENSION_URL).stream().findFirst().orElse(null);
+        if (markierungMainExtension == null) {
+            markierungMainExtension = metadataDocRef.addExtension().setUrl(MARKIERUNG_MAIN_EXTENSION_URL);
+        } else {
+            // Bestehende Sub-Extensions ggf. entfernen oder gezielt aktualisieren.
+            // Für diese Implementierung fügen wir hinzu oder aktualisieren gezielt.
+            // Es könnte sinnvoll sein, alte Sub-Extensions zu entfernen, um Konsistenz zu gewährleisten:
+            // markierungMainExtension.setExtension(new ArrayList<>()); // Vorsicht: Entfernt alle Sub-Extensions
+        }
+
+        // Sub-Extension "markierung" (Typ der Markierung)
+        List<Extension> markierungTypSubExtensions = markierungMainExtension.getExtensionsByUrl(SUB_EXT_MARKIERUNG_URL);
+        Extension markierungTypSubExtension = markierungTypSubExtensions.stream().findFirst().orElse(null);
+        if (markierungTypSubExtension == null) {
+            markierungTypSubExtension = markierungMainExtension.addExtension().setUrl(SUB_EXT_MARKIERUNG_URL);
+        }
+        // Gemäß Constraint ERGDocumentReferenceMarkierung-2: wenn "gelesen" (boolean) gesetzt wird,
+        // muss die "markierung" (coding) den Code "gelesen" haben.
+        Coding markierungCoding = new Coding()
+            .setSystem(MARKIERUNG_CODING_SYSTEM_FOR_GELESEN)
+            .setCode("gelesen")
+            .setDisplay("Gelesen"); // Display ist optional
+        markierungTypSubExtension.setValue(markierungCoding);
+
+        // Sub-Extension "gelesen" (Boolean-Flag)
+        List<Extension> gelesenSubExtensions = markierungMainExtension.getExtensionsByUrl(SUB_EXT_GELESEN_URL);
+        Extension gelesenSubExtension = gelesenSubExtensions.stream().findFirst().orElse(null);
+        if (gelesenSubExtension == null) {
+            gelesenSubExtension = markierungMainExtension.addExtension().setUrl(SUB_EXT_GELESEN_URL);
+        }
+        gelesenSubExtension.setValue(new BooleanType(true));
+
+        // Sub-Extension "details" (Wer hat die Aktion durchgeführt)
+        List<Extension> detailsSubExtensions = markierungMainExtension.getExtensionsByUrl(SUB_EXT_DETAILS_URL);
+        Extension detailsSubExtension = detailsSubExtensions.stream().findFirst().orElse(null);
+        if (detailsSubExtension == null) {
+            detailsSubExtension = markierungMainExtension.addExtension().setUrl(SUB_EXT_DETAILS_URL);
+        }
+        String detailsContent;
+        Profession profession = accessToken.getProfession();
+        String idNum = accessToken.getIdNumber(); // Sollte vorhanden sein gemäß validateAuthorization
+
+        if (profession == Profession.VERSICHERTER) {
+            detailsContent = "Gelesen-Markierung gesetzt von: Versicherter (ID: " + idNum + ", KVNR: " + accessToken.getKvnr().orElse("nicht vorhanden") + ")";
+        } else if (profession == Profession.KOSTENTRAEGER) {
+            detailsContent = "Gelesen-Markierung gesetzt von: Kostenträger (ID: " + idNum + ", TelematikID: " + accessToken.getTelematikId().orElse("nicht vorhanden") + ")";
+        } else if (profession != null) {
+            detailsContent = "Gelesen-Markierung gesetzt von: " + profession.toString() + " (ID: " + idNum + ")";
+        } else {
+            detailsContent = "Gelesen-Markierung gesetzt von: Unbekannte Profession (ID: " + idNum + ")";
+        }
+        detailsSubExtension.setValue(new StringType(detailsContent));
+
+        // Sub-Extension "zeitpunkt" (Wann wurde die Aktion durchgeführt)
+        List<Extension> zeitpunktSubExtensions = markierungMainExtension.getExtensionsByUrl(SUB_EXT_ZEITPUNKT_URL);
+        Extension zeitpunktSubExtension = zeitpunktSubExtensions.stream().findFirst().orElse(null);
+        if (zeitpunktSubExtension == null) {
+            zeitpunktSubExtension = markierungMainExtension.addExtension().setUrl(SUB_EXT_ZEITPUNKT_URL);
+        }
+        zeitpunktSubExtension.setValue(new DateTimeType(new java.util.Date()));
+        
+        LOGGER.info("Markierung-Extension zu metadataDocRef hinzugefügt/aktualisiert. Gelesen=true, Details='{}'", detailsContent);
+        // --- ENDE: Hinzufügen der Markierung-Extension ---
+
         responseParameters.addParameter().setName("dokumentMetadaten").setResource(metadataDocRef);
-        LOGGER.info("Metadaten-DocumentReference (mit ursprünglichem Content) zum Parameter 'dokumentMetadaten' hinzugefügt.");
+        LOGGER.info("Metadaten-DocumentReference (mit ursprünglichem Content und Markierung) zum Parameter 'dokumentMetadaten' hinzugefügt.");
 
         // 2. Angereichertes PDF (erechnung)
         if (retrieveAngereichertesPDF) {
