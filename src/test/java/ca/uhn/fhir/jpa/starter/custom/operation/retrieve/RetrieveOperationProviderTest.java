@@ -115,12 +115,14 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
     @Test
     void testRetrieveOperation() {
-        LOGGER.info("Starte Retrieve Operation Test");
+        LOGGER.info("Starte Retrieve Operation Test - Fokus auf Metadaten und strukturierte Daten");
         
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(true));
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false)); // Explizit nicht anfordern für diesen Test
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false)); // Explizit nicht anfordern
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
@@ -134,36 +136,39 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         assertNotNull(result, "Ergebnis sollte nicht null sein");
 
-        Parameters.ParametersParameterComponent dokumentParam = result.getParameter().stream()
-            .filter(p -> "dokument".equals(p.getName()))
-            .findFirst()
-            .orElse(null);
+        // Prüfe Metadaten
+        Parameters.ParametersParameterComponent metadataParam = result.getParameter("dokumentMetadaten");
+        assertNotNull(metadataParam, "Antwort sollte 'dokumentMetadaten' enthalten");
+        assertTrue(metadataParam.getResource() instanceof DocumentReference, "'dokumentMetadaten' sollte vom Typ DocumentReference sein");
+        DocumentReference retrievedMetadata = (DocumentReference) metadataParam.getResource();
+        assertNotNull(retrievedMetadata.getContent(), "'dokumentMetadaten' sollte eine Content-Liste haben.");
+        assertFalse(retrievedMetadata.getContent().isEmpty(), "'dokumentMetadaten' Content-Liste sollte nicht leer sein und die ursprünglichen Elemente enthalten.");
 
-        assertNotNull(dokumentParam, "Antwort sollte ein Dokument enthalten");
-        assertTrue(dokumentParam.getResource() instanceof DocumentReference, "Dokument sollte vom Typ DocumentReference sein");
+        // Prüfe strukturierte Daten (Invoice)
+        Parameters.ParametersParameterComponent strukturierteDatenParam = result.getParameter("strukturierteDaten");
+        assertNotNull(strukturierteDatenParam, "Antwort sollte 'strukturierteDaten' enthalten, wenn angefordert");
+        assertTrue(strukturierteDatenParam.getResource() instanceof Invoice, "'strukturierteDaten' sollte vom Typ Invoice sein");
+        Invoice invoice = (Invoice) strukturierteDatenParam.getResource();
+        assertNotNull(invoice.getId(), "Invoice sollte eine ID haben");
+
+        // Stelle sicher, dass andere Teile nicht vorhanden sind, da nicht angefordert
+        assertNull(result.getParameter("angereichertesPDF"), "Antwort sollte 'angereichertesPDF' nicht enthalten, da nicht angefordert.");
+        assertNull(result.getParameter("originalPDF"), "Antwort sollte 'originalPDF' nicht enthalten, da nicht angefordert.");
+        assertNull(result.getParameter("signatur"), "Antwort sollte 'signatur' nicht enthalten, da nicht angefordert.");
         
-        DocumentReference retrievedDoc = (DocumentReference) dokumentParam.getResource();
-        
-        boolean hasStructuredContent = retrievedDoc.getContent().stream()
-            .anyMatch(content -> 
-                content.getFormat() != null &&
-                "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(content.getFormat().getSystem()) &&
-                "rechnungsinhalt".equals(content.getFormat().getCode())
-            );
-            
-        assertTrue(hasStructuredContent, "Dokument sollte strukturierten Rechnungsinhalt enthalten");
-        
-        LOGGER.info("Retrieve Operation Test erfolgreich abgeschlossen");
+        LOGGER.info("Retrieve Operation Test - Fokus auf Metadaten und strukturierte Daten erfolgreich abgeschlossen");
     }
     
     @Test
     void testRetrieveOperationWithoutStructuredContent() {
-        LOGGER.info("Starte Retrieve Operation Test ohne strukturierten Rechnungsinhalt");
+        LOGGER.info("Starte Retrieve Operation Test ohne strukturierte Daten (nur Metadaten erwartet)");
         
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(false));
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
@@ -177,18 +182,16 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         assertNotNull(result, "Ergebnis sollte nicht null sein");
 
-        DocumentReference retrievedDoc = (DocumentReference) result.getParameter().get(0).getResource();
+        Parameters.ParametersParameterComponent metadataParam = result.getParameter("dokumentMetadaten");
+        assertNotNull(metadataParam, "Antwort sollte 'dokumentMetadaten' enthalten");
+        assertTrue(metadataParam.getResource() instanceof DocumentReference, "'dokumentMetadaten' sollte vom Typ DocumentReference sein");
+
+        assertNull(result.getParameter("strukturierteDaten"), "Antwort sollte 'strukturierteDaten' nicht enthalten, da nicht angefordert.");
+        assertNull(result.getParameter("angereichertesPDF"), "Antwort sollte 'angereichertesPDF' nicht enthalten, da nicht angefordert.");
+        assertNull(result.getParameter("originalPDF"), "Antwort sollte 'originalPDF' nicht enthalten, da nicht angefordert.");
+        assertNull(result.getParameter("signatur"), "Antwort sollte 'signatur' nicht enthalten, da nicht angefordert.");
         
-        boolean hasStructuredContent = retrievedDoc.getContent().stream()
-            .anyMatch(content -> 
-                content.getFormat() != null &&
-                "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(content.getFormat().getSystem()) &&
-                "rechnungsinhalt".equals(content.getFormat().getCode())
-            );
-            
-        assertFalse(hasStructuredContent, "Dokument sollte keinen strukturierten Rechnungsinhalt enthalten");
-        
-        LOGGER.info("Retrieve Operation Test ohne strukturierten Rechnungsinhalt erfolgreich abgeschlossen");
+        LOGGER.info("Retrieve Operation Test ohne strukturierte Daten erfolgreich abgeschlossen");
     }
     
     private String getPatientKvnr() {
@@ -272,12 +275,14 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
     
     @Test
     void testRetrieveOperationWithVersichertenToken() {
-        LOGGER.info("Starte Retrieve Operation Test mit Versicherten-Token (EGK1)");
+        LOGGER.info("Starte Retrieve Operation Test mit Versicherten-Token (EGK1) - Anforderung aller Teile");
         
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(true));
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(true));
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
@@ -290,8 +295,14 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
             .execute();
 
         assertNotNull(result, "Ergebnis sollte nicht null sein");
+        assertNotNull(result.getParameter("dokumentMetadaten"), "Sollte 'dokumentMetadaten' enthalten.");
+        assertNotNull(result.getParameter("strukturierteDaten"), "Sollte 'strukturierteDaten' enthalten.");
+        assertNotNull(result.getParameter("originalPDF"), "Sollte 'originalPDF' enthalten.");
+        assertNotNull(result.getParameter("angereichertesPDF"), "Sollte 'angereichertesPDF' enthalten.");
+        assertNotNull(result.getParameter("signatur"), "Sollte 'signatur' enthalten und vom Typ Signature sein.");
+        assertTrue(result.getParameter("signatur").getValue() instanceof Signature, "'signatur' sollte vom Typ Signature sein.");
         
-        LOGGER.info("Retrieve Operation Test mit Versicherten-Token erfolgreich abgeschlossen");
+        LOGGER.info("Retrieve Operation Test mit Versicherten-Token (Anforderung aller Teile) erfolgreich abgeschlossen");
     }
     
     @Test
@@ -330,8 +341,10 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(true));
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));
 
         String requestBody = ctx.newJsonParser().encodeResourceToString(params);
         LOGGER.info("Request Body erstellt: {} Bytes", requestBody.length());
@@ -408,11 +421,20 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
             Parameters result = ctx.newJsonParser().parseResource(Parameters.class, responseBody);
 
             assertNotNull(result, "Ergebnis sollte nicht null sein");
-            Parameters.ParametersParameterComponent dokumentParam = result.getParameter().stream()
-                .filter(p -> "dokument".equals(p.getName()))
+            Parameters.ParametersParameterComponent dokumentMetadatenParam = result.getParameter().stream()
+                .filter(p -> "dokumentMetadaten".equals(p.getName()))
                 .findFirst()
                 .orElse(null);
-            assertNotNull(dokumentParam, "Antwort sollte ein Dokument enthalten");
+            assertNotNull(dokumentMetadatenParam, "Antwort sollte 'dokumentMetadaten' enthalten");
+            assertTrue(dokumentMetadatenParam.getResource() instanceof DocumentReference, "'dokumentMetadaten' sollte DocumentReference sein.");
+
+            Parameters.ParametersParameterComponent strukturierteDatenParam = result.getParameter("strukturierteDaten");
+            assertNotNull(strukturierteDatenParam, "Antwort sollte 'strukturierteDaten' enthalten, da angefordert.");
+            assertTrue(strukturierteDatenParam.getResource() instanceof Invoice, "'strukturierteDaten' sollte Invoice sein.");
+
+            assertNull(result.getParameter("angereichertesPDF"), "VAU-Antwort sollte 'angereichertesPDF' nicht enthalten.");
+            assertNull(result.getParameter("originalPDF"), "VAU-Antwort sollte 'originalPDF' nicht enthalten.");
+            assertNull(result.getParameter("signatur"), "VAU-Antwort sollte 'signatur' nicht enthalten.");
             
         } catch (Exception e) {
             LOGGER.error("Fehler beim VAU-Request: {}", e.getMessage(), e);
@@ -439,10 +461,12 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(true));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         // Für diesen Test wollen wir sicherstellen, dass die originale Rechnung (falls vom Profil unterstützt)
         // und das angereicherte PDF angefordert werden, um alle Pfade zu testen.
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(true)); 
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(true)); 
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false)); // Signatur nicht primärer Fokus hier
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1"); // Passende Rolle für den Zugriff
 
@@ -456,100 +480,86 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         assertNotNull(result, "Ergebnis der $retrieve Operation sollte nicht null sein");
 
-        Parameters.ParametersParameterComponent dokumentParam = result.getParameter("dokument");
-        assertNotNull(dokumentParam, "Antwort sollte einen 'dokument'-Parameter enthalten");
-        assertTrue(dokumentParam.getResource() instanceof DocumentReference, "'dokument'-Parameter sollte eine DocumentReference sein");
-        DocumentReference retrievedDoc = (DocumentReference) dokumentParam.getResource();
-
-        // Optional: Strukturierte Daten (Invoice) extrahieren, um z.B. die Rechnungsnummer für Logs zu haben
-        // oder um zu prüfen, ob die Referenz korrekt ist.
-        DocumentReference.DocumentReferenceContentComponent invoiceContentElement = retrievedDoc.getContent().stream()
-            .filter(c -> c.getFormat() != null &&
-                        "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
-                        "rechnungsinhalt".equals(c.getFormat().getCode()))
-            .findFirst()
-            .orElse(null);
-        // Diese Assertion kann bleiben, wenn der strukturierte Inhalt immer erwartet wird, wenn angefordert.
-        assertNotNull(invoiceContentElement, "DocumentReference sollte strukturierten Rechnungsinhalt (format.code='rechnungsinhalt') enthalten, wenn angefordert.");
-        assertTrue(invoiceContentElement.getAttachment().hasUrl(), "Strukturierter Rechnungsinhalt Attachment sollte eine URL haben");
+        // Metadaten prüfen
+        Parameters.ParametersParameterComponent metadataParam = result.getParameter("dokumentMetadaten");
+        assertNotNull(metadataParam, "Antwort sollte einen 'dokumentMetadaten'-Parameter enthalten");
+        assertTrue(metadataParam.getResource() instanceof DocumentReference, "'dokumentMetadaten'-Parameter sollte eine DocumentReference sein");
         
-        // Invoice laden (kann für Logging oder optionale Vergleiche nützlich sein)
-        Invoice savedInvoice = client.read()
-            .resource(Invoice.class)
-            .withUrl(invoiceContentElement.getAttachment().getUrl())
-            .withAdditionalHeader("Authorization", authHeader)
-            .execute();
+        // Strukturierte Daten (Invoice) prüfen
+        Parameters.ParametersParameterComponent strukturierteDatenParam = result.getParameter("strukturierteDaten");
+        assertNotNull(strukturierteDatenParam, "Antwort sollte 'strukturierteDaten' enthalten, wenn angefordert.");
+        assertTrue(strukturierteDatenParam.getResource() instanceof Invoice, "'strukturierteDaten' sollte vom Typ Invoice sein.");
+        Invoice savedInvoice = (Invoice) strukturierteDatenParam.getResource();
         assertNotNull(savedInvoice, "Invoice-Ressource (strukturierter Inhalt) sollte ladbar sein.");
-        LOGGER.info("Strukturierte Invoice (ID: {}, Rechnungsnr.: {}) erfolgreich geladen.", 
+         LOGGER.info("Strukturierte Invoice (ID: {}, Rechnungsnr.: {}) erfolgreich geladen.", 
             savedInvoice.getIdElement().toVersionless(), 
             savedInvoice.hasIdentifier() ? savedInvoice.getIdentifierFirstRep().getValue() : "N/A");
 
-        // PDF extrahieren und validieren (Fokus auf Struktur und Metadaten)
-        DocumentReference.DocumentReferenceContentComponent pdfContentElement = retrievedDoc.getContent().stream()
-            .filter(c -> "application/pdf".equals(c.getAttachment().getContentType()) &&
-                         c.getFormat() != null &&
-                         "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
-                         "erechnung".equals(c.getFormat().getCode()))
-            .findFirst()
-            .orElse(null);
-        assertNotNull(pdfContentElement, "DocumentReference sollte PDF-Inhalt (format.code='erechnung', contentType='application/pdf') enthalten");
-        assertTrue(pdfContentElement.getAttachment().hasUrl(), "PDF Attachment sollte eine URL haben");
 
-        Binary pdfBinary = client.read()
-            .resource(Binary.class)
-            .withUrl(pdfContentElement.getAttachment().getUrl())
-            .withAdditionalHeader("Authorization", authHeader)
-            .execute();
+        // Angereichertes PDF prüfen und speichern
+        Parameters.ParametersParameterComponent angereichertesPdfParam = result.getParameter("angereichertesPDF");
+        assertNotNull(angereichertesPdfParam, "Antwort sollte 'angereichertesPDF' enthalten, wenn angefordert.");
+        assertTrue(angereichertesPdfParam.getResource() instanceof Binary, "'angereichertesPDF' sollte eine Binary sein.");
+        Binary angereichertesPdfBinary = (Binary) angereichertesPdfParam.getResource();
 
-        assertNotNull(pdfBinary, "Binary-Ressource für PDF sollte nicht null sein");
-        assertEquals("application/pdf", pdfBinary.getContentType(), "Content-Type der Binary sollte PDF sein");
-        assertTrue(pdfBinary.hasData(), "PDF-Binary sollte Daten enthalten.");
-        // Beispielhafte Mindestgrößenprüfung - Wert muss ggf. angepasst werden.
-        assertTrue(pdfBinary.getData().length > 1000, "PDF-Daten sollten eine plausible Mindestgröße haben (z.B. > 1KB). Aktuell: " + pdfBinary.getData().length + " Bytes."); 
+        assertNotNull(angereichertesPdfBinary, "Binary-Ressource für angereichertes PDF sollte nicht null sein");
+        assertEquals("application/pdf", angereichertesPdfBinary.getContentType(), "Content-Type der Binary sollte PDF sein");
+        assertTrue(angereichertesPdfBinary.hasData(), "Angereichertes PDF-Binary sollte Daten enthalten.");
+        assertTrue(angereichertesPdfBinary.getData().length > 1000, "Angereicherte PDF-Daten sollten eine plausible Mindestgröße haben."); 
 
-        // PDF-Datei im Output-Verzeichnis speichern für manuelle Inspektion
         java.nio.file.Path outputDir = java.nio.file.Paths.get("src", "test", "resources", "output");
         try {
             java.nio.file.Files.createDirectories(outputDir);
-            java.nio.file.Path pdfPath = outputDir.resolve("retrieved_invoice_" + ergTokenForRetrieveTest + ".pdf");
-            java.nio.file.Files.write(pdfPath, pdfBinary.getData());
-            LOGGER.info("PDF wurde erfolgreich gespeichert unter: {}", pdfPath.toAbsolutePath());
+            java.nio.file.Path pdfPath = outputDir.resolve("retrieved_enriched_invoice_" + ergTokenForRetrieveTest + ".pdf");
+            java.nio.file.Files.write(pdfPath, angereichertesPdfBinary.getData());
+            LOGGER.info("Angereichertes PDF wurde erfolgreich gespeichert unter: {}", pdfPath.toAbsolutePath());
         } catch (java.io.IOException e) {
-            LOGGER.error("Fehler beim Speichern der PDF-Datei: {}", e.getMessage(), e);
-            fail("Konnte PDF nicht im Output-Verzeichnis speichern: " + e.getMessage());
+            LOGGER.error("Fehler beim Speichern der angereicherten PDF-Datei: {}", e.getMessage(), e);
+            fail("Konnte angereicherte PDF nicht im Output-Verzeichnis speichern: " + e.getMessage());
         }
 
-        // Struktur-Validierung des PDFs mit PDFBox
-        try (PDDocument document = PDDocument.load(pdfBinary.getData())) {
-            assertNotNull(document, "PDF-Dokument sollte mit PDFBox ladbar sein (strukturelle Validität).");
-            assertTrue(document.getNumberOfPages() >= 1, "PDF sollte mindestens eine Seite haben.");
-            LOGGER.info("PDF-Dokument erfolgreich mit PDFBox geladen, Seitenanzahl: {}. Manuelle Inhaltsprüfung empfohlen für Datei: {}",
-                document.getNumberOfPages(), "retrieved_invoice_" + ergTokenForRetrieveTest + ".pdf");
+        try (PDDocument document = PDDocument.load(angereichertesPdfBinary.getData())) {
+            assertNotNull(document, "Angereichertes PDF-Dokument sollte mit PDFBox ladbar sein.");
+            assertTrue(document.getNumberOfPages() >= 1, "Angereichertes PDF sollte mindestens eine Seite haben.");
+            LOGGER.info("Angereichertes PDF-Dokument erfolgreich mit PDFBox geladen, Seitenanzahl: {}.", document.getNumberOfPages());
         } catch (Exception e) {
-            LOGGER.error("Fehler beim Laden des PDFs mit PDFBox: {}", e.getMessage(), e);
-            fail("Das heruntergeladene PDF konnte nicht mit PDFBox geöffnet werden, mögliche Korruption oder ungültiges Format.", e);
+            LOGGER.error("Fehler beim Laden des angereicherten PDFs mit PDFBox: {}", e.getMessage(), e);
+            fail("Das heruntergeladene angereicherte PDF konnte nicht mit PDFBox geöffnet werden.", e);
+        }
+
+        // Original PDF prüfen und speichern (falls vorhanden)
+        Parameters.ParametersParameterComponent originalPdfParam = result.getParameter("originalPDF");
+        if (originalPdfParam != null) { // Original PDF ist optional
+            assertTrue(originalPdfParam.getResource() instanceof Binary, "'originalPDF' sollte eine Binary sein.");
+            Binary originalPdfBinary = (Binary) originalPdfParam.getResource();
+
+            assertNotNull(originalPdfBinary, "Binary-Ressource für originales PDF sollte nicht null sein");
+            assertEquals("application/pdf", originalPdfBinary.getContentType(), "Content-Type der Binary sollte PDF sein");
+            assertTrue(originalPdfBinary.hasData(), "Originales PDF-Binary sollte Daten enthalten.");
+            assertTrue(originalPdfBinary.getData().length > 1000, "Originale PDF-Daten sollten eine plausible Mindestgröße haben.");
+
+            try {
+                java.nio.file.Path pdfPath = outputDir.resolve("retrieved_original_invoice_" + ergTokenForRetrieveTest + ".pdf");
+                java.nio.file.Files.write(pdfPath, originalPdfBinary.getData());
+                LOGGER.info("Originales PDF wurde erfolgreich gespeichert unter: {}", pdfPath.toAbsolutePath());
+            } catch (java.io.IOException e) {
+                LOGGER.error("Fehler beim Speichern der originalen PDF-Datei: {}", e.getMessage(), e);
+                fail("Konnte originales PDF nicht im Output-Verzeichnis speichern: " + e.getMessage());
+            }
+
+            try (PDDocument document = PDDocument.load(originalPdfBinary.getData())) {
+                assertNotNull(document, "Originales PDF-Dokument sollte mit PDFBox ladbar sein.");
+                assertTrue(document.getNumberOfPages() >= 1, "Originales PDF sollte mindestens eine Seite haben.");
+                 LOGGER.info("Originales PDF-Dokument erfolgreich mit PDFBox geladen, Seitenanzahl: {}.", document.getNumberOfPages());
+            } catch (Exception e) {
+                LOGGER.error("Fehler beim Laden des originalen PDFs mit PDFBox: {}", e.getMessage(), e);
+                fail("Das heruntergeladene originale PDF konnte nicht mit PDFBox geöffnet werden.", e);
+            }
+        } else {
+            LOGGER.info("Kein 'originalPDF' in der Antwort enthalten oder nicht angefordert, Speicherung und Validierung übersprungen.");
         }
         
-        // Die folgende Textextraktionslogik und Assertion wird auskommentiert,
-        // da sie sich als unzuverlässig für dieses spezifische PDF erwiesen hat.
-        /*
-        PDPage firstPage = document.getPage(0);
-        org.apache.pdfbox.text.PDFTextStripperByArea stripperByArea = new org.apache.pdfbox.text.PDFTextStripperByArea();
-        stripperByArea.setSortByPosition(true);
-        java.awt.Rectangle rect = new java.awt.Rectangle(50, (int) (firstPage.getMediaBox().getHeight() - 550), 500, 400); 
-        stripperByArea.addRegion("rechnungsdetails", rect);
-        stripperByArea.extractRegions(firstPage);
-        String text = stripperByArea.getTextForRegion("rechnungsdetails");
-        LOGGER.info("Extrahierter Text aus PDF-Region 'rechnungsdetails':{}{}{}",
-            System.lineSeparator() + "BEGIN REGION TEXT---" + System.lineSeparator(),
-            text,
-            System.lineSeparator() + "---END REGION TEXT");
-        String expectedInvoiceNumber = savedInvoice.getIdentifierFirstRep().getValue();
-        assertTrue(text != null && text.contains(expectedInvoiceNumber),
-            String.format("PDF-Region 'rechnungsdetails' sollte die Rechnungsnummer '%s' enthalten. Extrahierter Text war: %n%s", expectedInvoiceNumber, text));
-        */
-        
-        LOGGER.info("Test zum Herunterladen des Dokuments und Speichern der PDF erfolgreich abgeschlossen (Fokus auf strukturelle PDF-Validität und Speicherung zur manuellen Prüfung).");
+        LOGGER.info("Test zum Herunterladen des Dokuments und Speichern der PDF erfolgreich abgeschlossen.");
     }
 
     @Test
@@ -562,8 +572,10 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         
         Parameters params = new Parameters();
         params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
-        params.addParameter().setName("strukturierterRechnungsinhalt").setValue(new BooleanType(true));
-        params.addParameter().setName("originaleRechnung").setValue(new BooleanType(false));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(true));
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
@@ -577,15 +589,27 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         assertNotNull(result, "Ergebnis sollte nicht null sein");
 
-        Parameters.ParametersParameterComponent dokumentParam = result.getParameter().stream()
-            .filter(p -> "dokument".equals(p.getName()))
-            .findFirst()
-            .orElse(null);
-
-        assertNotNull(dokumentParam, "Antwort sollte ein Dokument enthalten");
-        assertTrue(dokumentParam.getResource() instanceof DocumentReference, "Dokument sollte vom Typ DocumentReference sein");
+        // Erweiterte Log-Ausgaben für das Ergebnisobjekt
+        LOGGER.info("testRetrieveOperationWithErezeptScope: Empfangenes Result-Objekt (Typ: {}):\n{}", 
+            result.fhirType(), 
+            ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(result));
         
-        DocumentReference retrievedDoc = (DocumentReference) dokumentParam.getResource();
+        if (result.hasParameter()) {
+            LOGGER.info("testRetrieveOperationWithErezeptScope: Anzahl der Parameter im Result: {}", result.getParameter().size());
+            result.getParameter().forEach(p -> {
+                String paramName = p.getName();
+                String paramType = p.getResource() != null ? p.getResource().fhirType() : (p.getValue() != null ? p.getValue().fhirType() : "N/A");
+                LOGGER.info("testRetrieveOperationWithErezeptScope: Parameter Name: '{}', Typ: '{}'", paramName, paramType);
+            });
+        } else {
+            LOGGER.info("testRetrieveOperationWithErezeptScope: Result-Objekt hat keine Parameter.");
+        }
+
+        Parameters.ParametersParameterComponent metadataParam = result.getParameter("dokumentMetadaten");
+        assertNotNull(metadataParam, "Antwort sollte 'dokumentMetadaten' enthalten");
+        assertTrue(metadataParam.getResource() instanceof DocumentReference, "Dokument sollte vom Typ DocumentReference sein");
+        
+        DocumentReference retrievedDoc = (DocumentReference) metadataParam.getResource();
         
         boolean hasStructuredContent = retrievedDoc.getContent().stream()
             .anyMatch(content -> 
@@ -596,7 +620,128 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
             
         assertTrue(hasStructuredContent, "Dokument sollte strukturierten Rechnungsinhalt enthalten");
         
+        Parameters.ParametersParameterComponent signaturParam = result.getParameter("signatur");
+        assertNotNull(signaturParam, "Antwort sollte 'signatur' enthalten");
+        assertTrue(signaturParam.getValue() instanceof Signature, "'signatur' sollte vom Typ Signature sein.");
+        
         LOGGER.info("Retrieve Operation Test mit openid e-rezept Scope erfolgreich abgeschlossen");
+    }
+
+    // Neue Tests für spezifische Output-Parameter
+
+    @Test
+    void testRetrieveOnlyAngereichertesPDF() {
+        LOGGER.info("Starte Retrieve Test - Nur angereichertes PDF");
+        Parameters params = new Parameters();
+        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));
+
+        String authHeader = "Bearer " + getValidAccessToken("EGK1");
+        Parameters result = client.operation()
+            .onType(DocumentReference.class)
+            .named("$retrieve")
+            .withParameters(params)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+
+        assertNotNull(result, "Ergebnis sollte nicht null sein");
+        assertNotNull(result.getParameter("dokumentMetadaten"), "Sollte 'dokumentMetadaten' enthalten.");
+        assertNotNull(result.getParameter("angereichertesPDF"), "Sollte 'angereichertesPDF' enthalten.");
+        assertTrue(result.getParameter("angereichertesPDF").getResource() instanceof Binary, "'angereichertesPDF' sollte Binary sein.");
+        assertNull(result.getParameter("strukturierteDaten"), "Sollte 'strukturierteDaten' NICHT enthalten.");
+        assertNull(result.getParameter("originalPDF"), "Sollte 'originalPDF' NICHT enthalten.");
+        assertNull(result.getParameter("signatur"), "Sollte 'signatur' NICHT enthalten.");
+        LOGGER.info("Retrieve Test - Nur angereichertes PDF erfolgreich.");
+    }
+
+    @Test
+    void testRetrieveOnlyOriginalPDF() {
+        LOGGER.info("Starte Retrieve Test - Nur Original PDF");
+        // Stelle sicher, dass ein Dokument mit Original-Referenz existiert.
+        // Im BaseProviderTest wird testRechnungDocRef so erstellt, dass es eine relatesTo transform Referenz hat.
+
+        Parameters params = new Parameters();
+        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest)); // ergTokenForRetrieveTest verweist auf die *transformierte* (angereicherte) Version
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(true));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));
+
+        String authHeader = "Bearer " + getValidAccessToken("EGK1");
+        Parameters result = client.operation()
+            .onType(DocumentReference.class)
+            .named("$retrieve")
+            .withParameters(params)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+
+        assertNotNull(result, "Ergebnis sollte nicht null sein");
+        assertNotNull(result.getParameter("dokumentMetadaten"), "Sollte 'dokumentMetadaten' enthalten.");
+        assertNotNull(result.getParameter("originalPDF"), "Sollte 'originalPDF' enthalten.");
+        assertTrue(result.getParameter("originalPDF").getResource() instanceof Binary, "'originalPDF' sollte Binary sein.");
+        assertNull(result.getParameter("angereichertesPDF"), "Sollte 'angereichertesPDF' NICHT enthalten.");
+        assertNull(result.getParameter("strukturierteDaten"), "Sollte 'strukturierteDaten' NICHT enthalten.");
+        assertNull(result.getParameter("signatur"), "Sollte 'signatur' NICHT enthalten.");
+        LOGGER.info("Retrieve Test - Nur Original PDF erfolgreich.");
+    }
+
+    @Test
+    void testRetrieveOnlySignatur() {
+        LOGGER.info("Starte Retrieve Test - Nur Signatur");
+        Parameters params = new Parameters();
+        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(true));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+
+        String authHeader = "Bearer " + getValidAccessToken("EGK1");
+        Parameters result = client.operation()
+            .onType(DocumentReference.class)
+            .named("$retrieve")
+            .withParameters(params)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+
+        assertNotNull(result, "Ergebnis sollte nicht null sein");
+        assertNotNull(result.getParameter("dokumentMetadaten"), "Sollte 'dokumentMetadaten' enthalten.");
+        assertNotNull(result.getParameter("signatur"), "Sollte 'signatur' enthalten.");
+        assertTrue(result.getParameter("signatur").getValue() instanceof Signature, "'signatur' sollte vom Typ Signature sein.");
+        assertNull(result.getParameter("angereichertesPDF"), "Sollte 'angereichertesPDF' NICHT enthalten.");
+        assertNull(result.getParameter("strukturierteDaten"), "Sollte 'strukturierteDaten' NICHT enthalten.");
+        assertNull(result.getParameter("originalPDF"), "Sollte 'originalPDF' NICHT enthalten.");
+        LOGGER.info("Retrieve Test - Nur Signatur erfolgreich.");
+    }
+
+    @Test
+    void testRetrieveNoOptionalParameters() {
+        LOGGER.info("Starte Retrieve Test - Keine optionalen Parameter (nur Metadaten)");
+        Parameters params = new Parameters();
+        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));
+
+        String authHeader = "Bearer " + getValidAccessToken("EGK1");
+        Parameters result = client.operation()
+            .onType(DocumentReference.class)
+            .named("$retrieve")
+            .withParameters(params)
+            .withAdditionalHeader("Authorization", authHeader)
+            .execute();
+
+        assertNotNull(result, "Ergebnis sollte nicht null sein");
+        assertNotNull(result.getParameter("dokumentMetadaten"), "Sollte 'dokumentMetadaten' enthalten.");
+        assertEquals(1, result.getParameter().size(), "Sollte nur den 'dokumentMetadaten' Parameter enthalten.");
+        assertNull(result.getParameter("angereichertesPDF"));
+        assertNull(result.getParameter("strukturierteDaten"));
+        assertNull(result.getParameter("originalPDF"));
+        assertNull(result.getParameter("signatur"));
+        LOGGER.info("Retrieve Test - Keine optionalen Parameter erfolgreich.");
     }
 
 } 
