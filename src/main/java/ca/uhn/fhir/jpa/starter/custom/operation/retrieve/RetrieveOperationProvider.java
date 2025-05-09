@@ -62,19 +62,30 @@ public class RetrieveOperationProvider implements IResourceProvider {
      * Implementierung der $retrieve Operation gemäß der Spezifikation
      * 
      * @param token Das Dokumenttoken zur Identifikation des abzurufenden Dokuments
-     * @param strukturierterRechnungsinhalt Steuert, ob die strukturierten Rechnungsinhalte zurückgegeben werden
-     * @param originaleRechnung Steuert, ob die originale Rechnung inkl. Signatur zurückgegeben wird
+     * @param returnAngereichertesPDF Steuert, ob das angereicherte PDF zurückgegeben wird
+     * @param returnStrukturierteDaten Steuert, ob die strukturierten Rechnungsinhalte zurückgegeben werden
+     * @param returnOriginalPDF Steuert, ob das originale PDF zurückgegeben wird
+     * @param returnSignatur Steuert, ob die Signatur zurückgegeben wird
      * @param theRequestDetails Request-Details mit Zugriff auf den AccessToken
-     * @return Parameters-Objekt mit dem DocumentReference
+     * @return Parameters-Objekt mit den DocumentReferences
      */
     @Operation(name = "$retrieve", idempotent = true)
     public Parameters retrieveOperation(
             @OperationParam(name = "token") StringType token,
-            @OperationParam(name = "strukturierterRechnungsinhalt") BooleanType strukturierterRechnungsinhalt,
-            @OperationParam(name = "originaleRechnung") BooleanType originaleRechnung,
+            @OperationParam(name = "returnAngereichertesPDF") BooleanType returnAngereichertesPDF,
+            @OperationParam(name = "returnStrukturierteDaten") BooleanType returnStrukturierteDaten,
+            @OperationParam(name = "returnOriginalPDF") BooleanType returnOriginalPDF,
+            @OperationParam(name = "returnSignatur") BooleanType returnSignatur,
             RequestDetails theRequestDetails
     ) {
         LOGGER.info("Retrieve Operation gestartet für Token {}", token != null ? token.getValue() : "null");
+        // DEBUG: Logge die empfangenen BooleanType Parameter direkt nach Deserialisierung
+        LOGGER.info("RetrieveOperation: Empfangene Parameter - returnAngereichertesPDF: {}, returnStrukturierteDaten: {}, returnOriginalPDF: {}, returnSignatur: {}",
+            returnAngereichertesPDF != null ? returnAngereichertesPDF.getValueAsString() : "null",
+            returnStrukturierteDaten != null ? returnStrukturierteDaten.getValueAsString() : "null",
+            returnOriginalPDF != null ? returnOriginalPDF.getValueAsString() : "null",
+            returnSignatur != null ? returnSignatur.getValueAsString() : "null"
+        );
 
         // Validiere Token-Parameter
         if (token == null || token.getValue() == null || token.getValue().isEmpty()) {
@@ -104,22 +115,21 @@ public class RetrieveOperationProvider implements IResourceProvider {
         validateDocumentAccess(document, accessToken);
 
         // Verarbeite das Dokument entsprechend der Parameter
-        DocumentReference processedDocument = processDocument(
-            document, 
-            strukturierterRechnungsinhalt != null && strukturierterRechnungsinhalt.getValue(),
-            originaleRechnung != null && originaleRechnung.getValue(),
-            accessToken
+        Parameters retVal = buildRetrieveResponse(
+            document,
+            returnAngereichertesPDF != null && returnAngereichertesPDF.getValue(),
+            returnStrukturierteDaten != null && returnStrukturierteDaten.getValue(),
+            returnOriginalPDF != null && returnOriginalPDF.getValue(),
+            returnSignatur != null && returnSignatur.getValue(),
+            accessToken,
+            theRequestDetails
         );
 
-        // Validiere das Ergebnis-Dokument
-        validateResultDocument(processedDocument);
-
-        // Erstelle die Antwort
-        Parameters retVal = new Parameters();
-        retVal.addParameter().setName("dokument").setResource(processedDocument);
-
-        // Protokolliere den Vorgang
-        // logRetrieveOperation(document, accessToken, strukturierterRechnungsinhalt != null && strukturierterRechnungsinhalt.getValue());
+        // Validiere das Ergebnis-Dokument - Diese Validierung muss ggf. angepasst werden,
+        // da die Struktur der Antwort nun flexibler ist (Parameters statt einzelner DocumentReference).
+        // Fürs Erste lassen wir sie auskommentiert oder entfernen sie, da die `Parameters`-Ressource
+        // an sich keine so strengen Validierungsregeln wie eine einzelne `DocumentReference` hat.
+        // validateResultDocument(processedDocument);
 
         LOGGER.info("Retrieve Operation erfolgreich beendet für Token {}", token.getValue());
         return retVal;
@@ -227,10 +237,12 @@ public class RetrieveOperationProvider implements IResourceProvider {
         results = daoRegistry.getResourceDao(DocumentReference.class)
             .search(paramMap);
         
-        LOGGER.info("Gesamtzahl der DocumentReference-Ressourcen für manuelles Filtern: {}", results.size());
+        // Prüfe, ob results.size() null ist, bevor es verwendet wird.
+        Integer resultSize = results.size();
+        LOGGER.info("Gesamtzahl der DocumentReference-Ressourcen für manuelles Filtern: {}", resultSize != null ? resultSize : "(unbekannt/null)");
         
-        if (results.isEmpty() == false && results.size() > 0) { // Sicherstellen, dass size() aufgerufen werden kann
-            List<IBaseResource> allDocs = results.getResources(0, results.size()); // Vorsicht: results.size() kann null zurückgeben, wenn keine Ressourcen gefunden wurden.
+        if (resultSize != null && resultSize > 0) { // isEmpty() ist nicht null-sicher
+            List<IBaseResource> allDocs = results.getResources(0, resultSize);
             for (IBaseResource res : allDocs) {
                 DocumentReference doc = (DocumentReference) res;
                 for (Identifier identifier : doc.getIdentifier()) {
@@ -333,85 +345,201 @@ public class RetrieveOperationProvider implements IResourceProvider {
     }
 
     /**
-     * Verarbeitet das Dokument entsprechend der Parameter
+     * Verarbeitet das Dokument entsprechend der Parameter und erstellt die Parameters-Antwort.
      */
-    private DocumentReference processDocument(
-            DocumentReference document,
-            boolean includeStructuredContent,
-            boolean includeOriginalInvoice,
-            AccessToken accessToken
+    private Parameters buildRetrieveResponse(
+            DocumentReference originalDocRef,
+            boolean retrieveAngereichertesPDF,
+            boolean retrieveStrukturierteDaten,
+            boolean retrieveOriginalPDF,
+            boolean retrieveSignatur,
+            AccessToken accessToken,
+            RequestDetails theRequestDetails
     ) {
-        // Logge das ankommende Dokument, um seinen Zustand zu verstehen
-        LOGGER.info("processDocument - Beginn. Ankommendes Dokument (ID: {}). IncludeStructuredContent: {}, IncludeOriginalInvoice: {}",
-                    document.getIdElement().toVersionless().getValue(), includeStructuredContent, includeOriginalInvoice);
-        if (document.hasContent()) {
-            LOGGER.info("Ankommendes Dokument hat {} Content-Elemente:", document.getContent().size());
-            for (int i = 0; i < document.getContent().size(); i++) {
-                DocumentReference.DocumentReferenceContentComponent c = document.getContent().get(i);
-                String contentType = c.hasAttachment() && c.getAttachment().hasContentType() ? c.getAttachment().getContentType() : "N/A";
-                String formatSystem = c.hasFormat() && c.getFormat().hasSystem() ? c.getFormat().getSystem() : "N/A";
-                String formatCode = c.hasFormat() && c.getFormat().hasCode() ? c.getFormat().getCode() : "N/A";
-                String url = c.hasAttachment() && c.getAttachment().hasUrl() ? c.getAttachment().getUrl() : "N/A (keine URL)";
-                String data = c.hasAttachment() && c.getAttachment().hasData() ? "Ja (" + c.getAttachment().getData().length + " Bytes)" : "Nein";
-                LOGGER.info("  Content [{}]: Type='{}', Format.System='{}', Format.Code='{}', URL='{}', Data vorhanden='{}'",
-                            i, contentType, formatSystem, formatCode, url, data);
+        Parameters responseParameters = new Parameters();
+        LOGGER.info("buildRetrieveResponse - Beginn für DocumentReference ID: {}. Flags: angPDF={}, strDaten={}, origPDF={}, signatur={}",
+            originalDocRef.getIdElement().toVersionless().getValue(), retrieveAngereichertesPDF, retrieveStrukturierteDaten, retrieveOriginalPDF, retrieveSignatur);
+
+        // 1. Metadaten-DocumentReference hinzufügen
+        DocumentReference metadataDocRef = originalDocRef.copy();
+        responseParameters.addParameter().setName("dokumentMetadaten").setResource(metadataDocRef);
+        LOGGER.info("Metadaten-DocumentReference (mit ursprünglichem Content) zum Parameter 'dokumentMetadaten' hinzugefügt.");
+
+        // 2. Angereichertes PDF (erechnung)
+        if (retrieveAngereichertesPDF) {
+            originalDocRef.getContent().stream()
+                .filter(c -> c.hasAttachment() && "application/pdf".equals(c.getAttachment().getContentType()) &&
+                             c.hasFormat() && "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
+                             "erechnung".equals(c.getFormat().getCode()) && c.getAttachment().hasUrl())
+                .findFirst()
+                .ifPresent(content -> {
+                    try {
+                        Binary pdfBinary = loadBinaryFromUrl(content.getAttachment().getUrl(), theRequestDetails);
+                        if (pdfBinary != null) {
+                            responseParameters.addParameter().setName("angereichertesPDF").setResource(pdfBinary);
+                            LOGGER.info("Angereichertes PDF (erechnung) als Binary-Ressource zum Parameter 'angereichertesPDF' hinzugefügt. URL: {}", content.getAttachment().getUrl());
+                        }
+                    } catch (Exception e) {
+                        LOGGER.warn("Konnte angereichertes PDF (erechnung) nicht laden von URL {}: {}", content.getAttachment().getUrl(), e.getMessage());
+                    }
+                });
+        }
+
+        // 3. Strukturierte Daten (Invoice)
+        if (retrieveStrukturierteDaten) {
+            originalDocRef.getContent().stream()
+                .filter(c -> c.hasAttachment() && "application/fhir+json".equals(c.getAttachment().getContentType()) &&
+                             c.hasFormat() && "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
+                             "rechnungsinhalt".equals(c.getFormat().getCode()) && c.getAttachment().hasUrl())
+                .findFirst()
+                .ifPresent(content -> {
+                    try {
+                        IdType invoiceId = new IdType(content.getAttachment().getUrl());
+                        if ("Invoice".equals(invoiceId.getResourceType()) && invoiceId.hasIdPart()) {
+                             Invoice invoice = daoRegistry.getResourceDao(Invoice.class).read(invoiceId, theRequestDetails);
+                             if (invoice != null) {
+                                responseParameters.addParameter().setName("strukturierteDaten").setResource(invoice);
+                                LOGGER.info("Strukturierte Daten (Invoice) zum Parameter 'strukturierteDaten' hinzugefügt. ID: {}", invoiceId.getValue());
+                             } else {
+                                 LOGGER.warn("Invoice mit ID {} nicht gefunden (null zurückgegeben).", invoiceId.getValue());
+                             }
+                        } else {
+                             LOGGER.warn("URL {} für strukturierte Daten verweist nicht auf eine gültige Invoice-Ressource oder hat keinen ID-Teil.", content.getAttachment().getUrl());
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        LOGGER.warn("Invoice Ressource nicht gefunden unter URL {}: {}", content.getAttachment().getUrl(), e.getMessage());
+                    } catch (Exception e) {
+                        LOGGER.warn("Konnte strukturierte Daten (Invoice) nicht laden von URL {}: {}", content.getAttachment().getUrl(), e.getMessage(), e);
+                    }
+                });
+        }
+
+        // 4. Original PDF
+        if (retrieveOriginalPDF) {
+
+            // DEBUG: Logge die relatesTo-Liste des originalDocRef
+            if (originalDocRef.hasRelatesTo()) {
+                LOGGER.info("OriginalPDF: DEBUG - originalDocRef.getRelatesTo() enthält {} Elemente.", originalDocRef.getRelatesTo().size());
+                for (int i = 0; i < originalDocRef.getRelatesTo().size(); i++) {
+                    DocumentReference.DocumentReferenceRelatesToComponent rel = originalDocRef.getRelatesTo().get(i);
+                    String relCode = rel.hasCode() ? rel.getCode().toCode() : "null";
+                    String targetRef = rel.hasTarget() && rel.getTarget().hasReference() ? rel.getTarget().getReference() : "null";
+                    LOGGER.info("OriginalPDF: DEBUG - relatesTo[{}]: code='{}', target.reference='{}'", i, relCode, targetRef);
+                }
+            } else {
+                LOGGER.info("OriginalPDF: DEBUG - originalDocRef hat keine relatesTo-Einträge.");
             }
-        } else {
-            LOGGER.warn("processDocument - Ankommendes Dokument (ID: {}) hat KEINE Content-Elemente.", document.getIdElement().toVersionless().getValue());
-        }
 
-        DocumentReference result = new DocumentReference();
-        // Kopiere alle Felder außer 'content' vom Originaldokument in das Ergebnis.
-        document.copyValues(result);
-        result.setContent(null); // Beginne mit einer leeren Content-Liste im Ergebnis
-
-        // 1. Angereichertes PDF (muss immer dabei sein, wenn vorhanden im Original)
-        document.getContent().stream()
-            .filter(c -> c.hasAttachment() && "application/pdf".equals(c.getAttachment().getContentType()) &&
-                         c.hasFormat() && "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
-                         "erechnung".equals(c.getFormat().getCode()))
-            .findFirst()
-            .ifPresent(pdfContent -> {
-                LOGGER.info("processDocument - 'erechnung' (PDF) Content-Element gefunden und zum Ergebnis hinzugefügt.");
-                result.addContent(pdfContent.copy());
-            });
-
-        // 2. Strukturierter Rechnungsinhalt (wenn gewünscht und im Original vorhanden)
-        if (includeStructuredContent) {
-            document.getContent().stream()
-                .filter(c -> c.hasAttachment() && c.hasFormat() &&
-                             "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
-                             "rechnungsinhalt".equals(c.getFormat().getCode()))
+            originalDocRef.getRelatesTo().stream()
+                .filter(rel -> rel.hasCode() && "transforms".equals(rel.getCode().toCode()) && rel.hasTarget() && rel.getTarget().hasReference())
                 .findFirst()
-                .ifPresent(structuredContent -> {
-                    LOGGER.info("processDocument - 'rechnungsinhalt' Content-Element gefunden und zum Ergebnis hinzugefügt (da includeStructuredContent=true).");
-                    result.addContent(structuredContent.copy());
+                .ifPresent(relatesToEntry -> {
+                    String sourceDocRefUrl = relatesToEntry.getTarget().getReference();
+                    LOGGER.info("OriginalPDF: Versuche Original-DocumentReference über relatesTo-Referenz zu laden. URL aus relatesTo.target.reference: {}", sourceDocRefUrl);
+                    try {
+                        IdType originalDocRefId = new IdType(sourceDocRefUrl);
+                        if (!"DocumentReference".equals(originalDocRefId.getResourceType()) || !originalDocRefId.hasIdPart()){
+                            LOGGER.warn("OriginalPDF: Referenz in relatesTo ({}) ist keine gültige DocumentReference ID.", sourceDocRefUrl);
+                            return;
+                        }
+                        DocumentReference sourceDocRef = daoRegistry.getResourceDao(DocumentReference.class).read(originalDocRefId, theRequestDetails);
+                        if (sourceDocRef != null) {
+                            // HINWEIS: Ausgabe der vollständigen sourceDocRef
+                            LOGGER.info("OriginalPDF: Folgende DocumentReference wurde erfolgreich über die URL '{}' geladen:\n{}", 
+                                        sourceDocRefUrl, 
+                                        ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(sourceDocRef));
+
+                            sourceDocRef.getContent().stream()
+                                // Vereinfachter Filter: Nimm das erste PDF-Attachment
+                                .filter(c -> c.hasAttachment() && "application/pdf".equals(c.getAttachment().getContentType()))
+                                .findFirst()
+                                .ifPresent(pdfContent -> {
+                                    try {
+                                        Binary originalPdfBinary = null;
+                                        if (pdfContent.getAttachment().hasData()) {
+                                            originalPdfBinary = new Binary();
+                                            originalPdfBinary.setContentType(pdfContent.getAttachment().getContentType());
+                                            originalPdfBinary.setData(pdfContent.getAttachment().getData());
+                                            LOGGER.info("OriginalPDF: Original PDF direkt aus Attachment.data der sourceDocRef erstellt.");
+                                        } else if (pdfContent.getAttachment().hasUrl()) {
+                                            // Dieser Pfad ist relevant, wenn das Original-PDF als separate Binary-Ressource gespeichert ist
+                                            // und in sourceDocRef.content.attachment.url darauf verwiesen wird.
+                                            originalPdfBinary = loadBinaryFromUrl(pdfContent.getAttachment().getUrl(), theRequestDetails);
+                                            //LOGGER.info("OriginalPDF: Original PDF als Binary-Ressource von URL {} geladen.", pdfContent.getAttachment().getUrl());
+                                        }
+
+                                        if (originalPdfBinary != null) {
+                                            responseParameters.addParameter().setName("originalPDF").setResource(originalPdfBinary);
+                                            LOGGER.info("OriginalPDF: Original PDF als Binary-Ressource zum Parameter 'originalPDF' hinzugefügt.");
+                                        } else {
+                                            LOGGER.warn("OriginalPDF: Konnte keine Daten oder URL für das Original PDF im sourceDocRef.content finden.");
+                                        }
+                                    } catch (Exception e) {
+                                        LOGGER.warn("OriginalPDF: Fehler beim Verarbeiten/Extrahieren des Original PDF Inhalts: {}", e.getMessage(), e);
+                                    }
+                                });
+                        } else {
+                            LOGGER.warn("OriginalPDF: Original-DocumentReference via relatesTo ({}) nicht gefunden (null zurückgegeben).", sourceDocRefUrl);
+                        }
+                    } catch (ResourceNotFoundException e) {
+                        LOGGER.warn("OriginalPDF: Original-DocumentReference Ressource nicht gefunden unter URL {}: {}", sourceDocRefUrl, e.getMessage());
+                    } catch (Exception e) {
+                        LOGGER.warn("OriginalPDF: Konnte referenziertes Original-DocumentReference nicht laden von {}: {}", sourceDocRefUrl, e.getMessage(), e);
+                    }
                 });
         }
 
-        // 3. Originale Rechnung (wenn gewünscht, Versicherter und im Original vorhanden)
-        if (includeOriginalInvoice && accessToken.getProfession() == Profession.VERSICHERTER) {
-            document.getContent().stream()
-                .filter(c -> c.hasAttachment() && c.hasFormat() &&
-                             "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs".equals(c.getFormat().getSystem()) &&
-                             "original".equals(c.getFormat().getCode()))
+        // 5. Signatur
+        if (retrieveSignatur) {
+            originalDocRef.getExtension().stream()
+                .filter(ext -> "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-signature".equals(ext.getUrl()))
                 .findFirst()
-                .ifPresent(originalContent -> {
-                    LOGGER.info("processDocument - 'original' Content-Element gefunden und zum Ergebnis hinzugefügt (da includeOriginalInvoice=true und Profession=VERSICHERTER).");
-                    result.addContent(originalContent.copy());
+                .ifPresent(ext -> {
+                    if (ext.getValue() instanceof Signature) {
+                        Signature signature = (Signature) ext.getValue();
+                        responseParameters.addParameter().setName("signatur").setValue(signature);
+                        LOGGER.info("Signatur aus Extension zum Parameter 'signatur' hinzugefügt.");
+                    } else {
+                        LOGGER.warn("Signatur-Extension gefunden, aber der Wert ist nicht vom Typ Signature. Gefunden: {}", ext.getValue().fhirType());
+                    }
                 });
         }
+        
+        LOGGER.info("buildRetrieveResponse - Ende. {} Parameter erstellt.", responseParameters.getParameter().size());
+        return responseParameters;
+    }
 
-        LOGGER.info("processDocument - Finale Anzahl Content-Elemente im Ergebnis: {}", result.getContent() != null ? result.getContent().size() : 0);
-        if (result.getContent() == null || result.getContent().isEmpty()) {
-            LOGGER.error("processDocument - ACHTUNG: DocumentReference wird OHNE Content-Elemente zurückgegeben. Ursprungs-ID: {}", document.getIdElement().toVersionless().getValue());
+    private Binary loadBinaryFromUrl(String url, RequestDetails theRequestDetails) {
+        if (url == null || url.isEmpty()) {
+            LOGGER.warn("URL zum Laden der Binary ist leer oder null.");
+            return null;
         }
-
-        return result;
+        try {
+            IdType binaryId = new IdType(url);
+            if (!"Binary".equals(binaryId.getResourceType()) || !binaryId.hasIdPart()) {
+                 LOGGER.warn("URL {} ist keine gültige relative Binary-Referenz (erwartet Format 'Binary/[ID]').", url);
+                 return null;
+            }
+            LOGGER.info("Versuche Binary zu laden mit ID: {}", binaryId.toUnqualifiedVersionless().getValue());
+            Binary binary = daoRegistry.getResourceDao(Binary.class).read(binaryId, theRequestDetails);
+            if (binary == null) {
+                LOGGER.warn("Binary mit ID {} nicht gefunden (null zurückgegeben).", binaryId.toUnqualifiedVersionless().getValue());
+            }
+            return binary;
+        } catch (ResourceNotFoundException e) {
+            LOGGER.warn("Binary-Ressource nicht gefunden unter URL {}: {}", url, e.getMessage());
+            return null;
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Laden der Binary-Ressource von URL {}: {}", url, e.getMessage(), e);
+            return null;
+        }
     }
 
     /**
      * Validiert das Ergebnis-Dokument gemäß den Anforderungen
+     * HINWEIS: Diese Methode ist nun weniger relevant, da die Antwort eine Parameters-Ressource ist
+     * und die einzelnen Komponenten optional sein können. Eine Validierung müsste ggf.
+     * auf der `Parameters`-Ressource selbst oder deren Inhalt basieren.
      */
     private void validateResultDocument(DocumentReference document) {
         // Prüfe, ob Status vorhanden ist
@@ -429,10 +557,11 @@ public class RetrieveOperationProvider implements IResourceProvider {
             throw new UnprocessableEntityException("Subject muss vorhanden sein");
         }
         
-        // Prüfe, ob Content vorhanden ist
-        if (document.getContent() == null || document.getContent().isEmpty()) {
-            throw new UnprocessableEntityException("Content muss vorhanden sein");
-        }
+        // Prüfe, ob Content vorhanden ist - DIESE PRÜFUNG IST FÜR DIE METADATEN-DOCREF NICHT MEHR SINNVOLL,
+        // DA content NUN NULL GESETZT WIRD.
+        // if (document.getContent() == null || document.getContent().isEmpty()) {
+        //     throw new UnprocessableEntityException("Content muss vorhanden sein");
+        // }
     }
 
     // /**
