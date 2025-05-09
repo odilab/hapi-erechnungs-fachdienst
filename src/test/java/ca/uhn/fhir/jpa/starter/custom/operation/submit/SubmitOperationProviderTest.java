@@ -452,4 +452,50 @@ public class SubmitOperationProviderTest extends BaseProviderTest {
         assertNotNull(outParams, "Die Operation sollte eine Antwort (Parameters-Objekt) zurückgeben.");
         return outParams;
     }
+
+    @Test
+    void testFetchTransformedDocumentReferenceByErgToken() {
+        String authHeader = "Bearer " + getValidAccessToken("SMCB_KRANKENHAUS");
+
+        // 1. Führe die Submit-Operation aus, um einen ERG-Token zu erhalten
+        Parameters inParams = baseInParams.copy();
+        inParams.addParameter("modus", new CodeType("normal"));
+
+        Parameters outParams = executeSuccessfulSubmitOperation(testPatient.getIdElement(), inParams, authHeader);
+        assertNotNull(outParams, "Die Operation sollte eine Antwort zurückgeben.");
+
+        // 2. ERG-Token extrahieren
+        Parameters.ParametersParameterComponent ergTokenParam = outParams.getParameter("ergToken");
+        assertNotNull(ergTokenParam, "Der ergToken-Parameter muss im Normalmodus vorhanden sein.");
+        assertTrue(ergTokenParam.getValue() instanceof StringType, "ergToken sollte ein StringType sein.");
+        String ergToken = ((StringType) ergTokenParam.getValue()).getValue();
+        assertNotNull(ergToken, "Der Wert des ergToken darf nicht null sein.");
+        assertFalse(ergToken.isEmpty(), "Der Wert des ergToken darf nicht leer sein.");
+        LOGGER.info("ERG-Token erfolgreich extrahiert: {}", ergToken);
+
+        // 3. Lade die transformierte DocumentReference über den ERG-Token
+        DocumentReference transformedDocRef = null;
+        try {
+            transformedDocRef = client.read()
+                .resource(DocumentReference.class)
+                .withId(ergToken) // Verwende den ergToken als ID
+                .withAdditionalHeader("Authorization", authHeader)
+                .execute();
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Laden der DocumentReference mit ID (ergToken) {}: {}", ergToken, e.getMessage(), e);
+            fail("Konnte die transformierte DocumentReference mit ID '" + ergToken + "' nicht laden.", e);
+        }
+
+        assertNotNull(transformedDocRef, "Die transformierte DocumentReference (ID: " + ergToken + ") darf nicht null sein.");
+        LOGGER.info("TransformedRechnung (ID: {}) erfolgreich über ERG-Token geladen.", transformedDocRef.getIdElement().getIdPart());
+
+        // 4. Gib die transformierte Rechnung zur Überprüfung in der Konsole aus
+        String transformedJson = ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(transformedDocRef);
+        LOGGER.info("--- Inhalt der per ERG-Token geladenen DocumentReference: ---\n{}", transformedJson);
+        LOGGER.info("--- Ende DocumentReference (geladen per ERG-Token) --- ");
+
+        // Optionale weitere Prüfungen, falls erforderlich
+        assertTrue(transformedDocRef.hasId(), "Die geladene DocumentReference muss eine ID haben.");
+        assertEquals(ergToken, transformedDocRef.getIdElement().getIdPart(), "Die ID der geladenen DocumentReference sollte dem ergToken entsprechen.");
+    }
 }
