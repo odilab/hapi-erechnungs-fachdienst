@@ -744,4 +744,76 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Retrieve Test - Keine optionalen Parameter erfolgreich.");
     }
 
+    @Test
+    void testRetrieveOperationAddsMarkierungExtension() {
+        LOGGER.info("Starte Retrieve Operation Test - Fokus auf Markierung-Extension");
+
+        Parameters params = new Parameters();
+        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
+        params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false)); // Nicht relevant für diesen Test
+        params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));     // Nicht relevant für diesen Test
+        params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false)); // Nicht relevant für diesen Test
+        params.addParameter().setName("returnSignatur").setValue(new BooleanType(false));        // Nicht relevant für diesen Test
+
+        String authHeader = "Bearer " + getValidAccessToken("EGK1"); // EGK1 als Beispiel
+
+        Parameters result = client.operation()
+            .onType(DocumentReference.class)
+            .named("$retrieve")
+            .withParameters(params)
+            .withAdditionalHeader("Authorization", authHeader)
+            .withAdditionalHeader("scope", "invoiceDoc.r") // oder "openid e-rezept"
+            .execute();
+
+        assertNotNull(result, "Ergebnis sollte nicht null sein");
+
+        // Prüfe Metadaten und die Markierung-Extension
+        Parameters.ParametersParameterComponent metadataParam = result.getParameter("dokumentMetadaten");
+        assertNotNull(metadataParam, "Antwort sollte 'dokumentMetadaten' enthalten");
+        assertTrue(metadataParam.getResource() instanceof DocumentReference, "'dokumentMetadaten' sollte vom Typ DocumentReference sein");
+        DocumentReference retrievedMetadata = (DocumentReference) metadataParam.getResource();
+
+        final String MARKIERUNG_MAIN_EXTENSION_URL = "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung";
+        final String SUB_EXT_MARKIERUNG_URL = "markierung";
+        final String SUB_EXT_GELESEN_URL = "gelesen";
+        final String SUB_EXT_DETAILS_URL = "details";
+        final String SUB_EXT_ZEITPUNKT_URL = "zeitpunkt";
+        final String MARKIERUNG_CODING_SYSTEM_FOR_GELESEN = "https://gematik.de/fhir/erg/ValueSet/erg-dokument-artderarchivierung-vs";
+        final String MARKIERUNG_CODE_GELESEN = "gelesen";
+
+        // Haupt-Extension prüfen
+        Extension markierungMainExtension = retrievedMetadata.getExtensionsByUrl(MARKIERUNG_MAIN_EXTENSION_URL).stream().findFirst().orElse(null);
+        assertNotNull(markierungMainExtension, "DocumentReference sollte die Markierung-Haupt-Extension enthalten.");
+
+        // Sub-Extension "markierung" (Typ der Markierung)
+        Extension markierungTypSubExtension = markierungMainExtension.getExtensionsByUrl(SUB_EXT_MARKIERUNG_URL).stream().findFirst().orElse(null);
+        assertNotNull(markierungTypSubExtension, "Markierung-Haupt-Extension sollte die 'markierung' Sub-Extension enthalten.");
+        assertTrue(markierungTypSubExtension.getValue() instanceof Coding, "Wert der 'markierung' Sub-Extension sollte vom Typ Coding sein.");
+        Coding markierungCoding = (Coding) markierungTypSubExtension.getValue();
+        assertEquals(MARKIERUNG_CODING_SYSTEM_FOR_GELESEN, markierungCoding.getSystem(), "System des 'markierung' Codings ist nicht korrekt.");
+        assertEquals(MARKIERUNG_CODE_GELESEN, markierungCoding.getCode(), "Code des 'markierung' Codings ist nicht korrekt.");
+
+        // Sub-Extension "gelesen"
+        Extension gelesenSubExtension = markierungMainExtension.getExtensionsByUrl(SUB_EXT_GELESEN_URL).stream().findFirst().orElse(null);
+        assertNotNull(gelesenSubExtension, "Markierung-Haupt-Extension sollte die 'gelesen' Sub-Extension enthalten.");
+        assertTrue(gelesenSubExtension.getValue() instanceof BooleanType, "Wert der 'gelesen' Sub-Extension sollte vom Typ BooleanType sein.");
+        assertTrue(((BooleanType) gelesenSubExtension.getValue()).booleanValue(), "'gelesen' Sub-Extension sollte den Wert true haben.");
+
+        // Sub-Extension "details"
+        Extension detailsSubExtension = markierungMainExtension.getExtensionsByUrl(SUB_EXT_DETAILS_URL).stream().findFirst().orElse(null);
+        assertNotNull(detailsSubExtension, "Markierung-Haupt-Extension sollte die 'details' Sub-Extension enthalten.");
+        assertTrue(detailsSubExtension.getValue() instanceof StringType, "Wert der 'details' Sub-Extension sollte vom Typ StringType sein.");
+        String detailsValue = ((StringType) detailsSubExtension.getValue()).getValue();
+        assertNotNull(detailsValue, "Wert der 'details' Sub-Extension (String) darf nicht null sein.");
+        assertFalse(detailsValue.isEmpty(), "Wert der 'details' Sub-Extension (String) darf nicht leer sein.");
+        LOGGER.info("Details der Gelesen-Markierung: {}", detailsValue); // Loggen zur manuellen Überprüfung bei Bedarf
+
+        // Sub-Extension "zeitpunkt"
+        Extension zeitpunktSubExtension = markierungMainExtension.getExtensionsByUrl(SUB_EXT_ZEITPUNKT_URL).stream().findFirst().orElse(null);
+        assertNotNull(zeitpunktSubExtension, "Markierung-Haupt-Extension sollte die 'zeitpunkt' Sub-Extension enthalten.");
+        assertTrue(zeitpunktSubExtension.getValue() instanceof DateTimeType, "Wert der 'zeitpunkt' Sub-Extension sollte vom Typ DateTimeType sein.");
+        assertNotNull(((DateTimeType) zeitpunktSubExtension.getValue()).getValue(), "Wert der 'zeitpunkt' Sub-Extension (Date) darf nicht null sein.");
+
+        LOGGER.info("Retrieve Operation Test - Fokus auf Markierung-Extension erfolgreich abgeschlossen.");
+    }
 } 
