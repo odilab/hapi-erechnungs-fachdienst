@@ -1,7 +1,8 @@
-package ca.uhn.fhir.jpa.starter.custom.operation.retrieve;
+package ca.uhn.fhir.jpa.starter.custom.operation;
 
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.Profession;
+import ca.uhn.fhir.jpa.starter.custom.operation.retrieve.DocumentRetrievalService;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
@@ -122,7 +123,7 @@ public class AuthorizationService {
         // Extrahiere die KVNR des Patienten
         String patientKvnr = documentRetrievalService.extractKvnrFromPatient(patientResource);
         if (patientKvnr == null) {
-            LOGGER.warn("Keine gültige KVNR im Patientenprofil {} gefunden.", patientResource.getIdElement().getIdPart());
+             LOGGER.warn("Keine gültige KVNR im Patientenprofil {} gefunden.", patientResource.getIdElement().getIdPart());
             throw new UnprocessableEntityException("Dokument bzw. zugehöriger Patient hat keine gültige KVNR (System: http://fhir.de/sid/gkv/kvid-10)");
         }
         LOGGER.debug("Patienten-KVNR extrahiert: {}", patientKvnr);
@@ -137,24 +138,24 @@ public class AuthorizationService {
                 String userKvnr = accessToken.getKvnr().orElse("");
                 LOGGER.debug("Vergleiche Patienten-KVNR ({}) mit Benutzer-KVNR ({}).", patientKvnr, userKvnr);
                 if (!patientKvnr.equals(userKvnr)) {
-                    LOGGER.warn("Zugriffsverletzung: Versicherter (KVNR: {}) versucht auf Dokument von Patient (KVNR: {}) zuzugreifen.", userKvnr, patientKvnr);
+                     LOGGER.warn("Zugriffsverletzung: Versicherter (KVNR: {}) versucht auf Dokument von Patient (KVNR: {}) zuzugreifen.", userKvnr, patientKvnr);
                     throw new ForbiddenOperationException("Versicherte dürfen nur ihre eigenen Dokumente abrufen");
                 }
                 LOGGER.info("Zugriff für Versicherten auf eigenes Dokument gewährt.");
                 break;
             case KOSTENTRAEGER:
-                LOGGER.debug("Kostenträger-Zugriff auf Dokument von Patient (KVNR: {}) wird geprüft.", patientKvnr);
+                 LOGGER.debug("Kostenträger-Zugriff auf Dokument von Patient (KVNR: {}) wird geprüft.", patientKvnr);
                 // Hier könnte eine zusätzliche Prüfung erfolgen, ob der Kostenträger für diesen Patienten zuständig ist
                 // Diese Logik müsste in einer realen Implementierung ergänzt werden (z.B. über Versichertenstammdaten)
-                LOGGER.info("Zugriff für Kostenträger auf Dokument von Patient (KVNR: {}) vorläufig gewährt (keine detaillierte Zuständigkeitsprüfung implementiert).", patientKvnr);
+                 LOGGER.info("Zugriff für Kostenträger auf Dokument von Patient (KVNR: {}) vorläufig gewährt (keine detaillierte Zuständigkeitsprüfung implementiert).", patientKvnr);
                 break;
             default:
-                LOGGER.warn("Unbehandelte Profession '{}' beim Versuch des Dokumentenzugriffs.", profession);
+                 LOGGER.warn("Unbehandelte Profession '{}' beim Versuch des Dokumentenzugriffs.", profession);
                 throw new ForbiddenOperationException("Ungültige Profession für Dokumentenzugriff: " + profession);
         }
     }
 
-    /**
+     /**
      * Authorisiert eine Anfrage für die Submit-Operation ($erechnung-submit).
      * Prüft, ob die Profession Leistungserbringer oder Arzt/Krankenhaus ist und der Scope 'invoiceDoc.c' oder 'openid e-rezept' vorhanden ist.
      * Wirft AuthenticationException oder ForbiddenOperationException bei unzureichender Berechtigung.
@@ -166,22 +167,22 @@ public class AuthorizationService {
         AccessToken accessToken = validateAndExtractAccessToken(requestDetails); // Nutzt die gemeinsame Extraktionsmethode
         Profession profession = accessToken.getProfession();
 
-        LOGGER.debug("Prüfe Berechtigung für Submit-Operation für Profession: {}", profession);
+         LOGGER.debug("Prüfe Berechtigung für Submit-Operation für Profession: {}", profession);
 
         if (profession == null || (profession != Profession.LEISTUNGSERBRINGER && profession != Profession.ARZT_KRANKENHAUS)) {
-            LOGGER.warn("Unzureichende Berechtigung für Submit-Operation. Profession: {}", profession);
+             LOGGER.warn("Unzureichende Berechtigung für Submit-Operation. Profession: {}", profession);
             throw new AuthenticationException("Keine ausreichende Berechtigung für die Submit-Operation. Nur Leistungserbringer und Ärzte im Krankenhaus dürfen Rechnungen einreichen.");
         }
 
         // Scope-Prüfung gemäß A_26029
         String scope = accessToken.getScope();
-        LOGGER.debug("Prüfe Scope '{}' für Submit-Operation.", scope);
+         LOGGER.debug("Prüfe Scope '{}' für Submit-Operation.", scope);
         if (scope == null || (!scope.contains("invoiceDoc.c") && !scope.contains("openid e-rezept"))) {
-            LOGGER.warn("Fehlender Scope für Submit-Operation: '{}'", scope);
+             LOGGER.warn("Fehlender Scope für Submit-Operation: '{}'", scope);
             throw new ForbiddenOperationException("Fehlender Scope: Erforderlich ist 'invoiceDoc.c' oder 'openid e-rezept'");
         }
 
-        LOGGER.info("Submit-Operation erfolgreich autorisiert für Profession: {}", profession);
+         LOGGER.info("Submit-Operation erfolgreich autorisiert für Profession: {}", profession);
         return accessToken;
     }
 } 

@@ -1,34 +1,26 @@
 package ca.uhn.fhir.jpa.starter.custom.operation.processFlag;
 
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
-import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessTokenService;
-import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.Profession;
 //import ca.uhn.fhir.jpa.starter.custom.interceptor.audit.AuditService;
-import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
 // Importiere die neuen Services
-import ca.uhn.fhir.jpa.starter.custom.operation.retrieve.AuthorizationService;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.retrieve.DocumentRetrievalService;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.IResourceProvider;
-import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
-import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import ca.uhn.fhir.context.FhirContext;
 
 import org.hl7.fhir.r4.model.*;
-import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import java.util.Date;
 
 /**
  * Provider für die Process-Flag-Operation, die das Markieren von Rechnungsdokumenten ermöglicht.
@@ -110,7 +102,7 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
 
         // 2. Berechtigungsprüfung
         AccessToken accessToken = authorizationService.validateAndExtractAccessToken(theRequestDetails);
-        authorizationService.validateAuthorization(accessToken, theRequestDetails); // Stellt sicher, dass Nutzer und Scope passen
+        authorizationService.authorizeAccessBasedOnContext(accessToken, theRequestDetails); // Stellt sicher, dass Nutzer und Scope passen
 
         // 3. Suche das Dokument anhand des Tokens (ID)
         DocumentReference document = processFlagService.findDocumentByToken(documentToken);

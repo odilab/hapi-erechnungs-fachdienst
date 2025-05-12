@@ -3,6 +3,7 @@ package ca.uhn.fhir.jpa.starter.custom.operation.submit;
 
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.IdParam;
@@ -21,12 +22,12 @@ public class SubmitOperationProvider implements IResourceProvider {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(SubmitOperationProvider.class);
 
-	private final SubmitAuthorizationService authorizationService;
+	private final AuthorizationService authorizationService;
 	private final RechnungProcessingService rechnungProcessingService;
 	private final DaoRegistry daoRegistry;
 
 	@Autowired
-	public SubmitOperationProvider(SubmitAuthorizationService authorizationService,
+	public SubmitOperationProvider(AuthorizationService authorizationService,
 									RechnungProcessingService rechnungProcessingService,
 									DaoRegistry daoRegistry) {
 		this.authorizationService = authorizationService;
@@ -61,7 +62,7 @@ public class SubmitOperationProvider implements IResourceProvider {
 		}
 
 		// 1. Berechtigungsprüfung
-		AccessToken accessToken = authorizationService.authorizeRequest(theRequestDetails);
+		AccessToken accessToken = authorizationService.authorizeSubmitOperation(theRequestDetails);
 		LOGGER.debug("Authorization successful for user with profession: {}", accessToken.getProfession());
 
 		// 2. FHIR-Validierung, ggf. Speicherung & Transformation über den neuen Service
