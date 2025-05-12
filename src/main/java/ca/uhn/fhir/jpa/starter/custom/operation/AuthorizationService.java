@@ -185,4 +185,43 @@ public class AuthorizationService {
          LOGGER.info("Submit-Operation erfolgreich autorisiert für Profession: {}", profession);
         return accessToken;
     }
+
+    /**
+     * Authorisiert eine Anfrage für die Change-Status-Operation ($change-status).
+     * Prüft, ob die Profession Versicherter ist, der Scope 'invoiceDoc.u' oder 'openid e-rezept' vorhanden ist
+     * und eine KVNR im Token existiert.
+     * Wirft AuthenticationException oder ForbiddenOperationException bei unzureichender Berechtigung.
+     *
+     * @param requestDetails Die RequestDetails, die den AccessToken enthalten.
+     * @return Den validierten AccessToken bei erfolgreicher Autorisierung.
+     */
+    public AccessToken authorizeChangeStatusOperation(RequestDetails requestDetails) {
+        AccessToken accessToken = validateAndExtractAccessToken(requestDetails); // Nutzt die gemeinsame Extraktionsmethode
+        Profession profession = accessToken.getProfession();
+
+        LOGGER.debug("Prüfe Berechtigung für Change-Status-Operation für Profession: {}", profession);
+
+        // Scope-Prüfung für Change-Status
+        String scope = accessToken.getScope();
+        LOGGER.debug("Prüfe Scope '{}' für Change-Status-Operation.", scope);
+        if (scope == null || (!scope.contains("invoiceDoc.u") && !scope.contains("openid e-rezept"))) {
+            LOGGER.warn("Fehlender oder ungültiger Scope '{}' für Change-Status (ID: {}). Erforderlich: 'invoiceDoc.u' oder 'openid e-rezept'", scope, accessToken.getIdNumber());
+            throw new ForbiddenOperationException("Fehlender oder ungültiger Scope: Erforderlich ist 'invoiceDoc.u' oder 'openid e-rezept'");
+        }
+
+        // Zusätzliche Prüfung auf Profession (nur Versicherter darf Status ändern)
+        if (profession != Profession.VERSICHERTER) {
+            LOGGER.warn("Unautorisierte Profession '{}' für Change-Status (ID: {}).", profession, accessToken.getIdNumber());
+            throw new ForbiddenOperationException("Nur Versicherte dürfen den Dokumentenstatus ändern.");
+        }
+
+        // Prüfe, ob die KVNR vorhanden ist (wird in validateDocumentAccess benötigt)
+        if (accessToken.getKvnr().isEmpty()) {
+            LOGGER.warn("Keine KVNR im Access Token des Versicherten gefunden (ID: {}).", accessToken.getIdNumber());
+            throw new ForbiddenOperationException("Keine KVNR im Access Token gefunden.");
+        }
+
+        LOGGER.info("Change-Status-Operation erfolgreich autorisiert für Versicherten mit ID: {}", accessToken.getIdNumber());
+        return accessToken;
+    }
 } 

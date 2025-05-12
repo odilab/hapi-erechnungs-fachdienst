@@ -94,27 +94,8 @@ public class ChangeStatusOperationProvider implements IResourceProvider {
             throw new InvalidRequestException("Der angegebene Status-Code ist ungültig. Gültige Werte sind: offen, erledigt, papierkorb.");
         }
 
-        // 1. Authentifizierung und Basis-Autorisierung über den zentralen Service
-        AccessToken accessToken = authorizationService.validateAndExtractAccessToken(theRequestDetails);
-        // TODO: Ggf. spezifischere Scope-Prüfung für Change-Status hinzufügen?
-        // Aktuell prüft validateAndExtractAccessToken nur auf Vorhandensein.
-        // Wir brauchen hier aber 'invoiceDoc.u' oder 'openid e-rezept'.
-        String scope = accessToken.getScope();
-        if (scope == null || (!scope.contains("invoiceDoc.u") && !scope.contains("openid e-rezept"))) {
-             LOGGER.warn("Fehlender oder ungültiger Scope '{}' für Change-Status (ID: {}). Erforderlich: 'invoiceDoc.u' oder 'openid e-rezept'", scope, accessToken.getIdNumber());
-            throw new ForbiddenOperationException("Fehlender oder ungültiger Scope: Erforderlich ist 'invoiceDoc.u' oder 'openid e-rezept'");
-        }
-
-        // Zusätzliche Prüfung auf Profession (nur Versicherter darf Status ändern)
-        if (accessToken.getProfession() != Profession.VERSICHERTER) {
-            LOGGER.warn("Unautorisierte Profession '{}' für Change-Status (ID: {}).", accessToken.getProfession(), accessToken.getIdNumber());
-            throw new ForbiddenOperationException("Nur Versicherte dürfen den Dokumentenstatus ändern.");
-        }
-        // Prüfe, ob die KVNR vorhanden ist (wird in validateDocumentAccess benötigt)
-        if (accessToken.getKvnr().isEmpty()) {
-            LOGGER.warn("Keine KVNR im Access Token des Versicherten gefunden (ID: {}).", accessToken.getIdNumber());
-            throw new ForbiddenOperationException("Keine KVNR im Access Token gefunden.");
-        }
+        // 1. Authentifizierung und Autorisierung über den zentralen Service
+        AccessToken accessToken = authorizationService.authorizeChangeStatusOperation(theRequestDetails);
 
         // 2. Lade das Dokument direkt über DAO
         DocumentReference document = null;
