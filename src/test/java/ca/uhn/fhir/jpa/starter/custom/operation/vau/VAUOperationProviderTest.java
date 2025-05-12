@@ -44,8 +44,10 @@ class VAUOperationProviderTest extends BaseProviderTest {
     private RestTemplate restTemplate;
     private String baseUrl;
 
+    @Override
     @BeforeEach
-    void setUp() throws Exception {
+    protected void setUp() throws Exception {
+        super.setUp();
         vauClientCrypto = new VAUClientCrypto();
         restTemplate = new RestTemplate();
         baseUrl = "http://localhost:" + port;
