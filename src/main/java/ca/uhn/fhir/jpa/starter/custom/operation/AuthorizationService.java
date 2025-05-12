@@ -2,7 +2,6 @@ package ca.uhn.fhir.jpa.starter.custom.operation;
 
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.Profession;
-import ca.uhn.fhir.jpa.starter.custom.operation.retrieve.DocumentRetrievalService;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;

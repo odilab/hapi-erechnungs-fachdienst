@@ -3,6 +3,7 @@ package ca.uhn.fhir.jpa.starter.custom.operation.retrieve;
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.Profession;
+import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 
@@ -14,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Service für die Verarbeitung und Aufbereitung von Dokumenten

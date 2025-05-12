@@ -3,6 +3,7 @@ package ca.uhn.fhir.jpa.starter.custom.operation.retrieve;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
+import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;

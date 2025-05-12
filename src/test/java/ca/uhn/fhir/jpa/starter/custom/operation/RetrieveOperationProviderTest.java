@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.custom.operation.retrieve;
+package ca.uhn.fhir.jpa.starter.custom.operation;
 
 import ca.uhn.fhir.jpa.starter.custom.BaseProviderTest;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
@@ -18,7 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.springframework.http.HttpHeaders;
-import org.apache.pdfbox.pdmodel.PDPage;
 
 import java.util.Base64;
 import javax.crypto.spec.SecretKeySpec;
@@ -26,7 +25,6 @@ import javax.crypto.spec.SecretKeySpec;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Collections;
-import java.util.Date;
 
 class RetrieveOperationProviderTest extends BaseProviderTest {
 
@@ -221,8 +219,9 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
                 .execute();
         });
         
-        assertTrue(exception.getMessage().contains("Kein Dokument mit Token"), 
-            "Fehlermeldung sollte auf nicht gefundenes Dokument hinweisen");
+        // Prüfe auf die Standard HAPI FHIR Fehlermeldung für nicht gefundene Ressourcen
+        assertTrue(exception.getMessage().contains("HAPI-2001: Resource") && exception.getMessage().contains("is not known"), 
+            "Fehlermeldung sollte auf nicht gefundene Ressource hinweisen (HAPI-2001)");
             
         LOGGER.info("Retrieve Operation Test mit ungültigem Token erfolgreich abgeschlossen");
     }

@@ -1,4 +1,4 @@
-package ca.uhn.fhir.jpa.starter.custom.operation.retrieve;
+package ca.uhn.fhir.jpa.starter.custom.operation;
 
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
@@ -6,6 +6,7 @@ import ca.uhn.fhir.rest.api.server.IBundleProvider;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 
 import org.hl7.fhir.r4.model.*;
 import org.hl7.fhir.instance.model.api.IBaseResource;
@@ -36,46 +37,34 @@ public class DocumentRetrievalService {
     }
 
     /**
-     * Sucht ein Dokument anhand des Tokens
+     * Sucht ein Dokument anhand des Tokens, wobei angenommen wird, dass der Token die logische ID ist.
      */
     public DocumentReference findDocumentByToken(String token) {
-        LOGGER.info("Suche Dokument mit Token: {}", token);
+        LOGGER.info("Suche Dokument direkt via ID (Token): {}", token);
 
-        // VERSUCH 1: Direkter Lesezugriff über ID (wenn der Token die logische ID ist)
         try {
             IdType docId = new IdType("DocumentReference", token);
-            DocumentReference document = daoRegistry.getResourceDao(DocumentReference.class).read(docId);
-            if (document != null) {
-                LOGGER.info("Dokument direkt via ID (Token) {} gefunden.", token);
-                logDocumentDetails(document, token);
+            // Wir verwenden hier die DAO read Methode, die ResourceNotFoundException wirft, wenn nichts gefunden wird.
+            IBaseResource resource = daoRegistry.getResourceDao(DocumentReference.class).read(docId);
+
+            if (resource instanceof DocumentReference) {
+                DocumentReference document = (DocumentReference) resource;
+                 LOGGER.info("Dokument direkt via ID (Token) {} gefunden.", token);
+                // Optional: Logge Details bei Erfolg
+                // logDocumentDetails(document, token);
                 return document;
+            } else {
+                 // Sollte durch DAO read eigentlich nicht passieren, aber zur Sicherheit
+                 LOGGER.error("Gelesene Ressource für ID (Token) {} ist unerwartet kein DocumentReference: {}", token, resource.fhirType());
+                 throw new InternalErrorException("Fehler beim Laden des Dokuments: Unerwarteter Ressourcentyp empfangen.");
             }
         } catch (ResourceNotFoundException e) {
-            LOGGER.info("Dokument mit ID (Token) {} nicht gefunden (ResourceNotFoundException), versuche Identifier-Suche.", token);
+             LOGGER.warn("Dokument mit ID (Token) {} nicht gefunden.", token);
+            throw e; // Exception weiterleiten, der Aufrufer muss entscheiden, wie damit umzugehen ist.
         } catch (Exception e) {
-            LOGGER.warn("Unerwarteter Fehler beim direkten Lesen der DocumentReference mit ID (Token) {}: {}. Versuche Identifier-Suche.", token, e.getMessage(), e);
+             LOGGER.error("Unerwarteter Fehler beim direkten Lesen der DocumentReference mit ID (Token) {}: {}.", token, e.getMessage(), e);
+             throw new InternalErrorException("Fehler beim Laden des Dokuments mit ID " + token + ": " + e.getMessage(), e);
         }
-        
-        // VERSUCH 2: Suche über Identifier mit spezifischem System
-        DocumentReference document = findDocumentByIdentifierWithSystem(token, "https://gematik.de/fhir/sid/erg-token");
-        if (document != null) {
-            return document;
-        }
-        
-        // VERSUCH 3: Suche über Identifier ohne Systemangabe
-        document = findDocumentByIdentifierWithoutSystem(token);
-        if (document != null) {
-            return document;
-        }
-        
-        // VERSUCH 4: Fallback - Durchsuche alle Dokumente und filtere manuell
-        document = findDocumentByManualFiltering(token);
-        
-        if (document == null) {
-            LOGGER.error("Kein Dokument mit Token {} nach allen Suchstrategien gefunden.", token);
-        }
-        
-        return document;
     }
 
     /**

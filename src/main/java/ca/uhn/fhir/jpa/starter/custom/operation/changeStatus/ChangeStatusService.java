@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.api.model.DaoMethodOutcome;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
+import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
@@ -41,6 +42,9 @@ public class ChangeStatusService {
     @Autowired
     private AuthorizationService authorizationService;
 
+    @Autowired
+    private DocumentRetrievalService documentRetrievalService;
+
 
     /**
      * Führt die Statusänderung für ein gegebenes Dokument durch.
@@ -53,8 +57,9 @@ public class ChangeStatusService {
     public DocumentReference processStatusChange(IdType documentId, String newStatus, AccessToken accessToken) {
         LOGGER.info("Beginne Verarbeitung der Statusänderung für Dokument-ID {} auf Status {}", documentId.getIdPart(), newStatus);
 
-        // 1. Lade das Dokument
-        DocumentReference document = loadDocumentReference(documentId);
+        // 1. Lade das Dokument über den DocumentRetrievalService, wobei documentId.getIdPart() der Token ist.
+        // Beachte: documentId enthält bereits den Typ "DocumentReference", findDocumentByToken erwartet aber nur die ID.
+        DocumentReference document = documentRetrievalService.findDocumentByToken(documentId.getIdPart());
 
         // 2. Prüfe Zugriff auf das Dokument
         authorizationService.validateDocumentAccess(document, accessToken);
@@ -79,33 +84,6 @@ public class ChangeStatusService {
             throw new InternalErrorException("Fehler bei der Verarbeitung der Statusänderung: " + e.getMessage(), e);
         }
     }
-
-    /**
-     * Lädt das DocumentReference-Objekt anhand seiner ID.
-     */
-    private DocumentReference loadDocumentReference(IdType id) {
-        try {
-            IBaseResource resource = daoRegistry.getResourceDao(DocumentReference.class).read(id);
-            if (resource instanceof DocumentReference) {
-                DocumentReference document = (DocumentReference) resource;
-                LOGGER.info("Dokument direkt via DAO geladen: ID={}, Version={}, Status={}",
-                        document.getIdElement().getIdPart(),
-                        document.getMeta().getVersionId(),
-                        document.getStatus());
-                return document;
-            } else {
-                LOGGER.error("Gelesene Ressource ist kein DocumentReference: {}", resource.fhirType());
-                throw new ResourceNotFoundException("Ressource mit ID " + id.getIdPart() + " ist kein DocumentReference.");
-            }
-        } catch (ResourceNotFoundException e) {
-            LOGGER.warn("Dokument mit ID {} nicht gefunden.", id.getIdPart());
-            throw e;
-        } catch (Exception e) {
-            LOGGER.error("Fehler beim Laden des Dokuments mit ID {} via DAO.", id.getIdPart(), e);
-            throw new InternalErrorException("Fehler beim Laden des Dokuments: " + e.getMessage(), e);
-        }
-    }
-
 
     /**
      * Ermittelt den aktuellen Status des Dokuments aus den Meta-Tags.
@@ -173,7 +151,8 @@ public class ChangeStatusService {
         DocumentReference savedDocument = (DocumentReference) outcome.getResource();
 
         // Stelle sicher, dass wir die aktuellste Version für die Meta-Operationen haben
-        DocumentReference currentSavedDoc = loadDocumentReference(savedDocument.getIdElement().toVersionless());
+        // Hier brauchen wir wieder die ID, da findDocumentByToken nur den ID-String nimmt.
+        DocumentReference currentSavedDoc = documentRetrievalService.findDocumentByToken(savedDocument.getIdElement().getIdPart());
 
         // 4. Entferne alte Status-Tags via $meta-delete
         removeAllStatusTags(currentSavedDoc);
@@ -182,7 +161,8 @@ public class ChangeStatusService {
         addStatusTag(currentSavedDoc, newStatus);
 
         // 6. Lese das finale Dokument mit allen Änderungen (Status, Extensions, Meta-Tags)
-        DocumentReference finalDocument = loadDocumentReference(currentSavedDoc.getIdElement().toVersionless());
+        // Erneutes Laden über die ID.
+        DocumentReference finalDocument = documentRetrievalService.findDocumentByToken(currentSavedDoc.getIdElement().getIdPart());
 
         LOGGER.info("Dokument {} erfolgreich aktualisiert: Status={}, Version={}, Tags={}",
                 finalDocument.getIdElement().getIdPart(),
