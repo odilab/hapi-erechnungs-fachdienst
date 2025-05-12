@@ -44,9 +44,6 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
     private DaoRegistry daoRegistry;
 
     @Autowired
-    private CustomValidator validator;
-
-    @Autowired
     private AccessTokenService accessTokenService; // Behalten wir vorerst, falls direkt benötigt
 
     // Injiziere die neuen Services
@@ -60,21 +57,18 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
     // private AuditService auditService;
 
     // Injiziere die neuen Services und den Validator
-    private final ProcessFlagInputValidator inputValidator;
     private final ProcessFlagService processFlagService;
     private final FhirContext ctx;
 
     @Autowired
     public ProcessFlagOperationProvider(FhirContext ctx,
                                       AuthorizationService authorizationService,
-                                      DocumentRetrievalService documentRetrievalService,
-                                      ProcessFlagInputValidator inputValidator,
-                                      ProcessFlagService processFlagService) {
+                                      ProcessFlagService processFlagService,
+                                      DocumentRetrievalService documentRetrievalService) {
         this.ctx = ctx;
         this.authorizationService = authorizationService;
-        this.documentRetrievalService = documentRetrievalService;
-        this.inputValidator = inputValidator;
         this.processFlagService = processFlagService;
+        this.documentRetrievalService = documentRetrievalService;
     }
 
     @Override
@@ -112,14 +106,14 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
         String documentToken = id.getIdPart();
 
         // 1. Validiere die Eingabeparameter
-        inputValidator.validateInputParameters(markierung, zeitpunkt, details, gelesen, artDerArchivierung);
+        validateInputParameters(markierung, zeitpunkt, details, gelesen, artDerArchivierung);
 
         // 2. Berechtigungsprüfung
         AccessToken accessToken = authorizationService.validateAndExtractAccessToken(theRequestDetails);
         authorizationService.validateAuthorization(accessToken, theRequestDetails); // Stellt sicher, dass Nutzer und Scope passen
 
         // 3. Suche das Dokument anhand des Tokens (ID)
-        DocumentReference document = documentRetrievalService.findDocumentByToken(documentToken);
+        DocumentReference document = processFlagService.findDocumentByToken(documentToken);
         if (document == null) {
             throw new ResourceNotFoundException("Kein Dokument mit Token (ID) " + documentToken + " gefunden");
         }
@@ -147,6 +141,62 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
 
         LOGGER.info("Process-Flag-Operation erfolgreich beendet für Dokument mit Token (ID) {}", documentToken);
         return result;
+    }
+
+    /**
+     * Private Methode zur Validierung der Eingabeparameter der $process-flag Operation.
+     *
+     * @param markierung          Die Art der Markierung als Coding.
+     * @param zeitpunkt           Der Zeitpunkt der Markierung.
+     * @param details             Optionale Details als Freitext zur Markierung.
+     * @param gelesen             Gelesen-Status falls Markierung vom Typ 'gelesen' ist.
+     * @param artDerArchivierung  Details zur Art der Archivierung falls Markierung vom Typ 'archiviert' ist.
+     * @throws UnprocessableEntityException Wenn die Validierung fehlschlägt.
+     */
+    private void validateInputParameters(Coding markierung, DateTimeType zeitpunkt, StringType details,
+                                        BooleanType gelesen, Coding artDerArchivierung) {
+        LOGGER.debug("Validating input parameters for $process-flag operation...");
+
+        if (markierung == null) {
+            LOGGER.error("Validation failed: Parameter 'markierung' is missing.");
+            throw new UnprocessableEntityException("Parameter 'markierung' ist erforderlich");
+        }
+        LOGGER.debug("Parameter 'markierung': System={}, Code={}", markierung.getSystem(), markierung.getCode());
+
+
+        if (zeitpunkt == null || !zeitpunkt.hasValue()) {
+            LOGGER.error("Validation failed: Parameter 'zeitpunkt' is missing or empty.");
+            throw new UnprocessableEntityException("Parameter 'zeitpunkt' ist erforderlich und darf nicht leer sein");
+        }
+        LOGGER.debug("Parameter 'zeitpunkt': {}", zeitpunkt.getValueAsString());
+
+        // Spezifische Validierungen je nach Markierungstyp
+        String markierungCode = markierung.getCode();
+        if ("gelesen".equals(markierungCode)) {
+            if (gelesen == null) {
+                LOGGER.error("Validation failed: Parameter 'gelesen' is missing for markierung 'gelesen'.");
+                throw new UnprocessableEntityException("Parameter 'gelesen' ist für Markierungstyp 'gelesen' erforderlich");
+            }
+            LOGGER.debug("Parameter 'gelesen': {}", gelesen.getValue());
+        } else if ("archiviert".equals(markierungCode)) {
+            if (artDerArchivierung == null) {
+                LOGGER.error("Validation failed: Parameter 'artDerArchivierung' is missing for markierung 'archiviert'.");
+                throw new UnprocessableEntityException("Parameter 'artDerArchivierung' ist für Markierungstyp 'archiviert' erforderlich");
+            }
+            LOGGER.debug("Parameter 'artDerArchivierung': System={}, Code={}", artDerArchivierung.getSystem(), artDerArchivierung.getCode());
+        } else {
+            LOGGER.warn("Unbekannter oder nicht unterstützter Markierungscode '{}'. Keine spezifische Parameterprüfung durchgeführt.", markierungCode);
+             // Hier könnten weitere bekannte Codes validiert oder eine Exception für unbekannte Codes geworfen werden.
+        }
+
+        if (details != null) {
+            LOGGER.debug("Parameter 'details': {}", details.getValue());
+        } else {
+            LOGGER.debug("Parameter 'details' is not provided.");
+        }
+
+
+        LOGGER.debug("Input parameter validation successful.");
     }
 
     // Die Methoden validateInputParameters, addMarkierungToDocument wurden in separate Services ausgelagert.
