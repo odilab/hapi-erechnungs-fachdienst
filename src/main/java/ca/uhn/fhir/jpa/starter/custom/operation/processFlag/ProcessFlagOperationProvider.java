@@ -7,6 +7,7 @@ import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessTokenService;
 // Importiere die neuen Services
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
@@ -51,16 +52,19 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
     // Injiziere die neuen Services und den Validator
     private final ProcessFlagService processFlagService;
     private final FhirContext ctx;
+    private final AuditService auditService;
 
     @Autowired
     public ProcessFlagOperationProvider(FhirContext ctx,
                                       AuthorizationService authorizationService,
                                       ProcessFlagService processFlagService,
-                                      DocumentRetrievalService documentRetrievalService) {
+                                      DocumentRetrievalService documentRetrievalService,
+                                      AuditService auditService) {
         this.ctx = ctx;
         this.authorizationService = authorizationService;
         this.processFlagService = processFlagService;
         this.documentRetrievalService = documentRetrievalService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -117,7 +121,49 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
         );
 
         // 6. Protokolliere die Markierung (falls AuditService aktiviert wird)
-        // logProcessFlagOperation(savedDocument, accessToken, markierung);
+        try {
+            Reference patientReference = null;
+            if (savedDocument.getSubject() != null && savedDocument.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
+                patientReference = savedDocument.getSubject();
+            }
+            String kvnr = accessToken.getKvnr().orElse(accessToken.getIdNumber());
+            String markierungsCodeFürBeschreibung = markierung.getCode() != null ? markierung.getCode() : "unbekannt";
+
+            AuditEvent auditEvent = auditService.createRestAuditEvent(
+                AuditEvent.AuditEventAction.U, // U für Update (da eine Markierung hinzugefügt/geändert wird)
+                "process-flag", // Korrekter Subtype-Code für die Operation
+                AuditEvent.AuditEventOutcome._0, // Erfolg
+                new Reference(savedDocument.getIdElement().toVersionless()),
+                "DocumentReference", // Konsistenter Resource Name, war "DocumentReference Flag Processing"
+                savedDocument.getIdElement().toVersionless().getValue(), // entityWhatDisplay
+                "Markierung '" + markierungsCodeFürBeschreibung + "' für DocumentReference ID '" + documentToken + "' durch Versicherten verarbeitet.",
+                accessToken.getIdNumber(), // actorName
+                kvnr, // actorId (KVNR des Versicherten)
+                patientReference // patientReference für Versicherter-Slice
+            );
+
+            // Füge spezifische Details zur Markierung hinzu
+            if (auditEvent != null && auditEvent.hasId()) {
+                if (markierung.getSystem() != null) {
+                    auditService.addEntityDetail(auditEvent, "markierung-system", markierung.getSystem());
+                }
+                if (markierung.getCode() != null) {
+                    auditService.addEntityDetail(auditEvent, "markierung-code", markierung.getCode());
+                }
+                if (markierung.getDisplay() != null) {
+                    auditService.addEntityDetail(auditEvent, "markierung-display", markierung.getDisplay());
+                }
+                // Ggf. weitere Details wie 'gelesen' oder 'artDerArchivierung' hinzufügen, falls relevant und im Audit benötigt
+                // Beispiel für 'gelesen', falls es als separates Detail geloggt werden soll:
+                // if (gelesen != null) { 
+                //     auditService.addEntityDetail(auditEvent, "markierung-gelesen-status", gelesen.getValueAsString());
+                // }
+            }
+
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Erstellen des AuditEvents für ProcessFlagOperation: {}", e.getMessage(), e);
+            // Die Hauptoperation sollte hierdurch nicht fehlschlagen
+        }
 
         // 7. Erstelle die Antwort
         Parameters result = new Parameters();

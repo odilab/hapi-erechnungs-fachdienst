@@ -163,6 +163,7 @@ class AuditServiceTest extends BaseProviderTest {
         
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertNotNull(auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte gesetzt sein.");
+        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
 
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");
@@ -193,6 +194,13 @@ class AuditServiceTest extends BaseProviderTest {
         
         try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
+        // HINWEIS ZU testRetrieveOperationAudit:
+        // Dieser Test sucht nach einem AuditEvent mit subtype='retrieve' vom Typ 'rest'. 
+        // Eine dedizierte Audit-Logik für die $retrieve-Operation (im RetrieveOperationProvider) wurde bisher nicht implementiert.
+        // Stattdessen setzt der DocumentProcessorService (der von $retrieve intern genutzt wird) eine "gelesen"-Markierung
+        // und loggt dies als System-AuditEvent mit subtype='update'.
+        // Daher wird dieser Test in seiner jetzigen Form wahrscheinlich fehlschlagen oder keine relevanten REST-AuditEvents finden.
+        // Er müsste angepasst werden, um entweder das System-Event zu prüfen oder es muss Audit-Logging im RetrieveOperationProvider ergänzt werden.
         Bundle results = client.search()
             .forResource(AuditEvent.class)
             .where(AuditEvent.TYPE.exactly().systemAndCode("http://terminology.hl7.org/CodeSystem/audit-event-type", "rest"))
@@ -224,6 +232,7 @@ class AuditServiceTest extends BaseProviderTest {
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertEquals("DocumentReference", auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
         assertTrue(auditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
+        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
 
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");
@@ -278,7 +287,8 @@ class AuditServiceTest extends BaseProviderTest {
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertEquals("DocumentReference", auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
         assertTrue(auditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
-        
+        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
+
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");
         
@@ -349,7 +359,8 @@ class AuditServiceTest extends BaseProviderTest {
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertEquals("DocumentReference", auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
         assertTrue(auditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
-        
+        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
+
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");
         
@@ -417,6 +428,7 @@ class AuditServiceTest extends BaseProviderTest {
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertEquals("DocumentReference", auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
         assertTrue(auditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
+        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
 
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");
@@ -429,9 +441,12 @@ class AuditServiceTest extends BaseProviderTest {
         AuditEvent createdAuditEvent = auditService.createSystemAuditEvent(
             AuditEvent.AuditEventAction.C,
             "system-event-subtype",
+            AuditEvent.AuditEventOutcome._0,
             new Reference("DocumentReference/" + ergToken),
             "DocumentReference",
-            "System-Event Beschreibung"
+            "DocumentReference/" + ergToken,
+            "System-Event Beschreibung",
+            null
         );
         
         assertNotNull(createdAuditEvent, "Das System-AuditEvent sollte erstellt worden sein");
@@ -482,6 +497,7 @@ class AuditServiceTest extends BaseProviderTest {
         assertTrue(foundAuditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
         assertEquals("DocumentReference", foundAuditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
         assertTrue(foundAuditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
+        assertNotNull(foundAuditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
         assertEquals("System-Event Beschreibung", foundAuditEvent.getEntityFirstRep().getDescription(), "Die Beschreibung sollte korrekt sein.");
 
         assertTrue(foundAuditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");

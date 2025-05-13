@@ -11,6 +11,9 @@ import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import org.hl7.fhir.r4.model.DocumentReference;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
+import org.hl7.fhir.r4.model.AuditEvent;
+import org.hl7.fhir.r4.model.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,14 +27,17 @@ public class EraseOperationProvider implements IResourceProvider {
     private final AuthorizationService authorizationService;
     private final DocumentRetrievalService documentRetrievalService;
     private final EraseService eraseService;
+    private final AuditService auditService;
 
     @Autowired
     public EraseOperationProvider(AuthorizationService authorizationService,
                                   DocumentRetrievalService documentRetrievalService,
-                                  EraseService eraseService) {
+                                  EraseService eraseService,
+                                  AuditService auditService) {
         this.authorizationService = authorizationService;
         this.documentRetrievalService = documentRetrievalService;
         this.eraseService = eraseService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -60,8 +66,35 @@ public class EraseOperationProvider implements IResourceProvider {
         // 3. Prüfe, ob der Nutzer berechtigt ist, DIESE DocumentReference zu löschen (KVNR-Abgleich)
         authorizationService.validateDocumentAccess(documentReference, accessToken); 
 
+        // Speichere die ID und Subject Referenz für das Audit-Log, bevor die documentReference gelöscht wird
+        String erasedDocumentId = documentReference.getIdElement().toVersionless().getValue();
+        Reference patientRefForAudit = null;
+        if (documentReference.getSubject() != null && documentReference.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
+            patientRefForAudit = documentReference.getSubject().copy(); // Kopieren, da Original bald weg sein könnte
+        }
+
         // 4. Führe die eigentliche Löschlogik im EraseService aus
         eraseService.eraseDocumentReferenceAndAssociations(documentReference, accessToken);
+
+        // 5. Audit-Log Eintrag erstellen
+        try {
+            String kvnr = accessToken.getKvnr().orElse(accessToken.getIdNumber());
+            auditService.createRestAuditEvent(
+                AuditEvent.AuditEventAction.D, // D für Delete
+                "erase", // Korrekter Subtype-Code
+                AuditEvent.AuditEventOutcome._0, // Erfolg
+                new Reference("DocumentReference/" + erasedDocumentId), // Referenz auf das gelöschte Dokument
+                "DocumentReference Erase", // Resource Name
+                "DocumentReference/" + erasedDocumentId, // entityWhatDisplay
+                "DocumentReference mit ID '" + erasedDocumentId + "' gelöscht durch Versicherten.",
+                accessToken.getIdNumber(), // actorName
+                kvnr, // actorId (KVNR des Versicherten)
+                patientRefForAudit // patientReference für Versicherter-Slice
+            );
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Erstellen des AuditEvents für EraseOperation: {}", e.getMessage(), e);
+            // Die Hauptoperation sollte hierdurch nicht fehlschlagen
+        }
 
         OperationOutcome outcome = new OperationOutcome();
         outcome.addIssue()

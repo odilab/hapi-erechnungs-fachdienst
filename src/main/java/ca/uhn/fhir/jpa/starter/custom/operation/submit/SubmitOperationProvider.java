@@ -4,6 +4,7 @@ package ca.uhn.fhir.jpa.starter.custom.operation.submit;
 import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.IdParam;
@@ -25,14 +26,17 @@ public class SubmitOperationProvider implements IResourceProvider {
 	private final AuthorizationService authorizationService;
 	private final RechnungProcessingService rechnungProcessingService;
 	private final DaoRegistry daoRegistry;
+	private final AuditService auditService;
 
 	@Autowired
 	public SubmitOperationProvider(AuthorizationService authorizationService,
 									RechnungProcessingService rechnungProcessingService,
-									DaoRegistry daoRegistry) {
+									DaoRegistry daoRegistry,
+									AuditService auditService) {
 		this.authorizationService = authorizationService;
 		this.rechnungProcessingService = rechnungProcessingService;
 		this.daoRegistry = daoRegistry;
+		this.auditService = auditService;
 	}
 
 	@Override
@@ -158,7 +162,38 @@ public class SubmitOperationProvider implements IResourceProvider {
         }
 
 		// TODO: Protokollierung der Operation (ggf. in eigenem Service)
-		// logSubmitOperation(savedRechnung, rechnungToken.token, accessToken);
+		if (validationResult != null && validationResult.transformedRechnung != null && validationResult.transformedRechnung.hasId() && !(modus != null && "test".equals(modus.getValueAsString()))) {
+			try {
+				// Annahme: patientId ist die Referenz auf den Patienten (Versicherten)
+				Reference patientReference = new Reference(patientId.getValue()); 
+				String actorId = accessToken.getTelematikId().orElse(accessToken.getIdNumber()); // Für LE Telematik-ID, sonst IDNumber
+
+				AuditEvent auditEvent = auditService.createRestAuditEvent(
+					AuditEvent.AuditEventAction.C, // C für Create
+					"erechnung-submit", // Korrekter Subtype-Code
+					AuditEvent.AuditEventOutcome._0, // Erfolg
+					new Reference(validationResult.transformedRechnung.getIdElement().toVersionless()),
+					"Erechnung Submission", // Resource Name
+					validationResult.transformedRechnung.getIdElement().toVersionless().getValue(), // entityWhatDisplay
+					"E-Rechnung mit ERG-Token '" + validationResult.transformedRechnung.getIdElement().getIdPart() + "' eingereicht durch Akteur '" + actorId + "' für Patient '" + patientId.getIdPart() + "'.",
+					accessToken.getIdNumber(), // actorName (oder ein anderer passender Name aus dem Token)
+					actorId, // actorId (Telematik-ID oder ID des Rechnungserstellers)
+					patientReference // patientReference für Versicherter-Slice
+				);
+
+				// Füge spezifisches Detail für den Workflow-Status hinzu, falls das AuditEvent erfolgreich erstellt wurde
+				if (auditEvent != null && auditEvent.hasId()) { // Sicherstellen, dass das Event existiert und gespeichert wurde (eine ID hat)
+					// Annahme: Der initiale Workflow-Status nach dem Submit ist "OFFEN" oder ein Äquivalent.
+					// Dieser Wert muss ggf. aus der Logik des RechnungProcessingService oder der DocumentReference selbst kommen.
+					String workflowStatus = "OFFEN"; // Beispielwert, anpassen falls nötig!
+					auditService.addEntityDetail(auditEvent, "workflow-status", workflowStatus);
+				}
+
+			} catch (Exception e) {
+				LOGGER.error("Fehler beim Erstellen des AuditEvents für SubmitOperation: {}", e.getMessage(), e);
+				// Die Hauptoperation sollte hierdurch nicht fehlschlagen
+			}
+		}
 
 		LOGGER.info("Submit Operation erfolgreich beendet für Patient {}", patientId != null ? patientId.getIdPart() : "UNKNOWN");
 		return retVal;

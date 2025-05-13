@@ -4,6 +4,9 @@ import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
+import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
+import org.hl7.fhir.r4.model.AuditEvent;
+import org.hl7.fhir.r4.model.Reference;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
@@ -30,17 +33,20 @@ public class RetrieveOperationProvider implements IResourceProvider {
     private final AuthorizationService authorizationService;
     private final DocumentProcessorService documentProcessorService;
     private final CustomValidator validator;
+    private final AuditService auditService;
 
     @Autowired
     public RetrieveOperationProvider(
             DocumentRetrievalService documentRetrievalService,
             AuthorizationService authorizationService,
             DocumentProcessorService documentProcessorService,
-            CustomValidator validator) {
+            CustomValidator validator,
+            AuditService auditService) {
         this.documentRetrievalService = documentRetrievalService;
         this.authorizationService = authorizationService;
         this.documentProcessorService = documentProcessorService;
         this.validator = validator;
+        this.auditService = auditService;
     }
 
     @Override
@@ -99,6 +105,31 @@ public class RetrieveOperationProvider implements IResourceProvider {
             accessToken,
             theRequestDetails
         );
+
+        // 5. Audit-Log Eintrag erstellen für die Lese-Operation
+        try {
+            Reference patientReference = null;
+            if (document.getSubject() != null && document.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
+                patientReference = document.getSubject();
+            }
+            String kvnr = accessToken.getKvnr().orElse(accessToken.getIdNumber());
+
+            auditService.createRestAuditEvent(
+                AuditEvent.AuditEventAction.R, // R für Read
+                "retrieve", // Offizieller Subtype-Code
+                AuditEvent.AuditEventOutcome._0, // Erfolg
+                new Reference(document.getIdElement().toVersionless()),
+                "DocumentReference", // Korrigierter Resource Name
+                document.getIdElement().toVersionless().getValue(), // entityWhatDisplay
+                "DocumentReference mit Token '" + token + "' abgerufen durch Versicherten.",
+                accessToken.getIdNumber(), // actorName
+                kvnr, // actorId (KVNR des Versicherten)
+                patientReference // patientReference für Versicherter-Slice
+            );
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Erstellen des AuditEvents für RetrieveOperation: {}", e.getMessage(), e);
+            // Die Hauptoperation sollte hierdurch nicht fehlschlagen
+        }
 
         LOGGER.info("Retrieve Operation erfolgreich beendet für Token {}", token.getValue());
         return response;

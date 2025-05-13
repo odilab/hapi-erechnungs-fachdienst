@@ -16,6 +16,9 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
+import org.hl7.fhir.r4.model.AuditEvent;
+
 /**
  * Service für die Verarbeitung und Aufbereitung von Dokumenten
  */
@@ -26,6 +29,7 @@ public class DocumentProcessorService {
 
     private final DaoRegistry daoRegistry;
     private final DocumentRetrievalService documentRetrievalService;
+    private final AuditService auditService;
 
     // URLs für Extensions
     private static final String MARKIERUNG_MAIN_EXTENSION_URL = "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung";
@@ -36,9 +40,10 @@ public class DocumentProcessorService {
     private static final String MARKIERUNG_CODING_SYSTEM_FOR_GELESEN = "https://gematik.de/fhir/erg/ValueSet/erg-dokument-artderarchivierung-vs";
 
     @Autowired
-    public DocumentProcessorService(DaoRegistry daoRegistry, DocumentRetrievalService documentRetrievalService) {
+    public DocumentProcessorService(DaoRegistry daoRegistry, DocumentRetrievalService documentRetrievalService, AuditService auditService) {
         this.daoRegistry = daoRegistry;
         this.documentRetrievalService = documentRetrievalService;
+        this.auditService = auditService;
     }
 
     /**
@@ -149,6 +154,31 @@ public class DocumentProcessorService {
         zeitpunktSubExtension.setValue(new DateTimeType(new java.util.Date()));
         
         LOGGER.info("Markierung-Extension zu metadataDocRef hinzugefügt/aktualisiert. Gelesen=true, Details='{}'", detailsContent);
+
+        // Audit-Log für die Systemaktion des Markierens als gelesen
+        try {
+            Reference patientReferenceForAudit = null;
+            if (docRef.getSubject() != null && docRef.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
+                patientReferenceForAudit = docRef.getSubject();
+            }
+
+            // Da dies eine Systemaktion ist, die durch den Lesezugriff des Nutzers ausgelöst wird,
+            // ist der primäre Akteur des AuditEvents der Fachdienst.
+            // Die Information über den auslösenden Nutzer (accessToken) ist im "detailsContent" der Extension enthalten.
+            auditService.createSystemAuditEvent(
+                AuditEvent.AuditEventAction.U, // U für Update (die DocumentReference wird mit der Extension aktualisiert)
+                "update", // Korrekter Subtype-Code für die Systemaktion des Aktualisierens
+                AuditEvent.AuditEventOutcome._0, // Erfolg
+                new Reference(docRef.getIdElement().toVersionless()),
+                "DocumentReference Gelesen-Markierung", // Resource Name
+                docRef.getIdElement().toVersionless().getValue(), // entityWhatDisplay
+                "System hat DocumentReference ID '" + docRef.getIdElement().getIdPart() + "' als gelesen markiert (Extension). Ausgelöst durch Nutzer: " + detailsContent,
+                patientReferenceForAudit // patientReference für Versicherter-Slice, falls vorhanden
+            );
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Erstellen des System-AuditEvents für Markierung-Extension in DocumentProcessorService: {}", e.getMessage(), e);
+            // Die Hauptoperation sollte hierdurch nicht fehlschlagen
+        }
     }
 
     /**

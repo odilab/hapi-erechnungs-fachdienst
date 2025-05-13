@@ -59,9 +59,15 @@ public class ChangeStatusOperationProvider implements IResourceProvider {
     private ChangeStatusService changeStatusService;
 
     @Autowired
-    public ChangeStatusOperationProvider(FhirContext ctx, AuthorizationService authorizationService) {
+    private AuditService auditService;
+
+    @Autowired
+    public ChangeStatusOperationProvider(FhirContext ctx, AuthorizationService authorizationService, DocumentRetrievalService documentRetrievalService, ChangeStatusService changeStatusService, AuditService auditService) {
         this.ctx = ctx;
         this.authorizationService = authorizationService;
+        this.documentRetrievalService = documentRetrievalService;
+        this.changeStatusService = changeStatusService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -98,6 +104,25 @@ public class ChangeStatusOperationProvider implements IResourceProvider {
         // ResourceNotFoundException wird von documentRetrievalService geworfen, falls nichts gefunden wird.
         DocumentReference document = documentRetrievalService.findDocument(id.getIdPart());
         
+        // Ermittle den alten Status für das Audit-Log, BEVOR er geändert wird.
+        // Annahme: Der Status ist in einem Tag der Meta-Informationen gespeichert.
+        // Dies ist eine vereinfachte Annahme und muss an Ihre tatsächliche Status-Speicherlogik angepasst werden!
+        String alterStatusValue = "UNBEKANNT"; // Fallback
+        if (document.getMeta() != null && document.getMeta().getTag() != null) {
+            // Suchen Sie hier nach dem spezifischen Tag, das Ihren Status repräsentiert.
+            // Beispiel: Annahme, es ist ein Tag mit einem bestimmten System.
+            // Für dieses Beispiel nehmen wir an, der erste gefundene Tag-Code ist der Status.
+            // In einer echten Implementierung wäre hier eine robustere Logik nötig.
+            for (Coding metaTag : document.getMeta().getTag()) {
+                // Beispiel: if ("https://IhrSystem.de/CodeSystem/status".equals(metaTag.getSystem())) {
+                if (VALID_STATUS_CODES.contains(metaTag.getCode())) { // Prüfen, ob der Code ein valider Status ist
+                    alterStatusValue = metaTag.getCode();
+                    break;
+                }
+            }
+        }
+        LOGGER.info("Alter Status für Audit-Log ermittelt: {}", alterStatusValue);
+
         // 3. Prüfe Zugriff auf DIESES Dokument über den zentralen Service
         authorizationService.validateDocumentAccess(document, accessToken);
 
@@ -107,6 +132,38 @@ public class ChangeStatusOperationProvider implements IResourceProvider {
         // 5. Erstelle die Antwort gemäß der Spezifikation
         Parameters result = new Parameters();
         result.addParameter().setName("meta").setValue(updatedDocument.getMeta());
+
+        // 6. Audit-Log Eintrag erstellen
+        try {
+            Reference patientReference = null;
+            if (updatedDocument.getSubject() != null && updatedDocument.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
+                patientReference = updatedDocument.getSubject();
+            }
+            String kvnr = accessToken.getKvnr().orElse(accessToken.getIdNumber()); // Fallback auf IDNumber, falls KVNR nicht da
+
+            AuditEvent auditEvent = auditService.createRestAuditEvent(
+                AuditEvent.AuditEventAction.U, // U für Update
+                "change-status", // Korrekter Subtype-Code
+                AuditEvent.AuditEventOutcome._0, // Erfolg
+                new Reference(updatedDocument.getIdElement().toVersionless()),
+                "DocumentReference", // Konsistenter Resource Name
+                updatedDocument.getIdElement().toVersionless().getValue(), // entityWhatDisplay
+                "Status von DocumentReference mit ID '" + id.getIdPart() + "' geändert von '" + alterStatusValue + "' zu '" + tag + "' durch Versicherten.",
+                accessToken.getIdNumber(), // actorName - Korrektur: getIdNumber() als Fallback
+                kvnr, // actorId (KVNR des Versicherten)
+                patientReference // patientReference für Versicherter-Slice
+            );
+
+            // Füge spezifische Details für alten und neuen Status hinzu
+            if (auditEvent != null && auditEvent.hasId()) {
+                auditService.addEntityDetail(auditEvent, "alter-status", alterStatusValue);
+                auditService.addEntityDetail(auditEvent, "neuer-status", tag);
+            }
+
+        } catch (Exception e) {
+            LOGGER.error("Fehler beim Erstellen des AuditEvents für ChangeStatusOperation: {}", e.getMessage(), e);
+            // Die Hauptoperation sollte hierdurch nicht fehlschlagen
+        }
             
         LOGGER.info("Change-Status-Operation erfolgreich beendet für Dokument mit ID {}", id.getIdPart());
         return result;

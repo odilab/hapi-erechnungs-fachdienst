@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -71,7 +72,7 @@ public class ChangeStatusService {
             DocumentReference updatedDocument = updateDocumentStatus(document, newStatus);
 
             // 5. Protokolliere die Statusänderung
-            logChangeStatusOperation(updatedDocument, accessToken, currentStatus, newStatus);
+            //logChangeStatusOperation(updatedDocument, accessToken, currentStatus, newStatus);
 
             LOGGER.info("Statusänderung für Dokument {} erfolgreich verarbeitet.", documentId.getIdPart());
             return updatedDocument;
@@ -299,30 +300,30 @@ public class ChangeStatusService {
     }
 
 
-    /**
-     * Protokolliert die Change-Status-Operation im AuditLog.
-     */
-    private void logChangeStatusOperation(DocumentReference document, AccessToken accessToken, String alterStatus, String neuerStatus) {
-        String actorName = accessToken.getGivenName() + " " + accessToken.getFamilyName();
-        // KVNR sollte vorhanden sein, da in authorizeChangeStatusOperation geprüft
-        String actorId = accessToken.getKvnr().orElse("Unbekannt");
+    // /**
+    //  * Protokolliert die Change-Status-Operation im AuditLog.
+    //  */
+    // private void logChangeStatusOperation(DocumentReference document, AccessToken accessToken, String alterStatus, String neuerStatus) {
+    //     String actorName = accessToken.getGivenName() + " " + accessToken.getFamilyName();
+    //     // KVNR sollte vorhanden sein, da in authorizeChangeStatusOperation geprüft
+    //     String actorId = accessToken.getKvnr().orElse("Unbekannt");
 
-        AuditEvent auditEvent = auditService.createRestAuditEvent(
-                AuditEvent.AuditEventAction.U, // Update Action
-                "change-status",
-                new Reference(document.getId()), // Referenz auf das geänderte Dokument
-                "DocumentReference",
-                "Statusänderung eines Rechnungsvorgangs von '" + alterStatus + "' zu '" + neuerStatus + "'",
-                actorName,
-                actorId
-        );
+    //     AuditEvent auditEvent = auditService.createRestAuditEvent(
+    //             AuditEvent.AuditEventAction.U, // Update Action
+    //             "change-status",
+    //             new Reference(document.getId()), // Referenz auf das geänderte Dokument
+    //             "DocumentReference",
+    //             "Statusänderung eines Rechnungsvorgangs von '" + alterStatus + "' zu '" + neuerStatus + "'",
+    //             actorName,
+    //             actorId
+    //     );
 
-        // Füge spezifische Details hinzu
-        auditService.addEntityDetail(auditEvent, "alter-status", alterStatus);
-        auditService.addEntityDetail(auditEvent, "neuer-status", neuerStatus);
-        auditService.addEntityDetail(auditEvent, "document-version", document.getMeta().getVersionId());
+    //     // Füge spezifische Details hinzu
+    //     auditService.addEntityDetail(auditEvent, "alter-status", alterStatus);
+    //     auditService.addEntityDetail(auditEvent, "neuer-status", neuerStatus);
+    //     auditService.addEntityDetail(auditEvent, "document-version", document.getMeta().getVersionId());
 
-        // AuditEvent wird implizit durch den AuditInterceptor gespeichert.
-         LOGGER.debug("AuditEvent für Statusänderung (Dokument {}) erstellt.", document.getIdElement().getIdPart());
-    }
+    //     // AuditEvent wird implizit durch den AuditInterceptor gespeichert.
+    //      LOGGER.debug("AuditEvent für Statusänderung (Dokument {}) erstellt.", document.getIdElement().getIdPart());
+    // }
 } 
