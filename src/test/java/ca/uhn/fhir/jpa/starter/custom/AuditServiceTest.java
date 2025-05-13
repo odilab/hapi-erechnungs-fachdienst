@@ -675,12 +675,14 @@ class AuditServiceTest extends BaseProviderTest {
 
         Bundle resultsByAgent = client.search()
             .forResource(AuditEvent.class)
-            .where(AuditEvent.AGENT.hasId(versichertenKvnr))
+            .where(AuditEvent.AGENT.hasId(testPatient.getIdElement().getIdPart())) 
             .returnBundle(Bundle.class)
             .withAdditionalHeader("Authorization", "Bearer " + leistungserbringerToken)
             .execute();
 
-        assertTrue(resultsByAgent.getEntry().size() > 0, "Es sollten AuditEvents gefunden werden, bei denen der Versicherte mit KVNR " + versichertenKvnr + " der Agent war.");
-        LOGGER.info("Gefunden: {} AuditEvents für Agent KVNR {}", resultsByAgent.getTotal(), versichertenKvnr);
+        assertTrue(resultsByAgent.getEntry().size() > 0, 
+            "Es sollten AuditEvents gefunden werden, bei denen der Versicherte (Patient-ID: " + testPatient.getIdElement().getIdPart() + ", KVNR: " + versichertenKvnr + ") der Agent war.");
+        LOGGER.info("Gefunden: {} AuditEvents für Agent (Patient-ID: {}, KVNR: {})", 
+            resultsByAgent.getTotal(), testPatient.getIdElement().getIdPart(), versichertenKvnr);
     }
 } 

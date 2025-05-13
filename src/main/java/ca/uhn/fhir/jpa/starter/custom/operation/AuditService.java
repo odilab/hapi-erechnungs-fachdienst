@@ -92,10 +92,23 @@ public class AuditService {
             .setName(actorName)
             .setRequestor(true);
 
-        if (actorId != null) {
-            agent.getWho().setIdentifier(new Identifier().setValue(actorId)) // System wird hier nicht explizit gesetzt, da es KVNR oder TelematikID sein kann
-                .setDisplay(actorName);
+        if (patientReference != null && patientReference.hasReference()) {
+            // Wenn eine patientReference vorhanden ist, ist der Akteur der Patient.
+            // Setze die Referenz auf die Patientenressource.
+            agent.getWho().setReference(patientReference.getReferenceElement().getValue());
+            // actorId ist in diesem Fall die KVNR und wird als Identifier gesetzt.
+            if (actorId != null && !actorId.isEmpty()) {
+                agent.getWho().setIdentifier(new Identifier().setValue(actorId));
+            }
+            // Display-Name für agent.who kann der actorName (Name des Patienten) sein.
+            agent.getWho().setDisplay(actorName);
         } else {
+            // Andernfalls ist der Akteur kein Patient (z.B. Leistungserbringer).
+            // actorId ist hier z.B. die Telematik-ID.
+            if (actorId != null && !actorId.isEmpty()) {
+                agent.getWho().setIdentifier(new Identifier().setValue(actorId));
+            }
+            // Display-Name für agent.who kann der actorName (Name des LE) sein.
             agent.getWho().setDisplay(actorName);
         }
         
