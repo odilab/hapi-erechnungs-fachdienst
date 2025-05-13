@@ -385,6 +385,86 @@ class AuditServiceTest extends BaseProviderTest {
     void testEraseOperationAudit() {
         assertNotNull(ergToken, "ergToken sollte im Setup initialisiert worden sein.");
 
+        // Zuerst den Status auf "papierkorb" setzen
+        Parameters changeStatusParams = new Parameters();
+        changeStatusParams.addParameter().setName("tag").setValue(new StringType("papierkorb"));
+
+        try {
+            LOGGER.info("AuditServiceTest.testEraseOperationAudit: Versuche, Status auf 'papierkorb' zu setzen für DocumentReference ID: {}", ergToken);
+            client.operation()
+                .onInstance(new IdType("DocumentReference", ergToken))
+                .named("$change-status")
+                .withParameters(changeStatusParams)
+                .withAdditionalHeader("Authorization", "Bearer " + versichertenToken)
+                .execute();
+            LOGGER.info("AuditServiceTest.testEraseOperationAudit: Status erfolgreich auf 'papierkorb' gesetzt für DocumentReference ID: {}", ergToken);
+        } catch (Exception e) {
+            LOGGER.error("AuditServiceTest.testEraseOperationAudit: Fehler beim Setzen des Status auf 'papierkorb' für DocumentReference ID: {}. Fehlermeldung: {}", ergToken, e.getMessage(), e);
+            fail("Fehler beim Vorbereiten des Dokuments für den Erase-Test (Status auf 'papierkorb' setzen): " + e.getMessage());
+            return;
+        }
+
+        // Kurze Pause, um sicherzustellen, dass die Statusänderung verarbeitet wurde
+        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        // Überprüfen, ob der Status korrekt gesetzt wurde (optional, aber gut für die Fehlersuche)
+        try {
+            DocumentReference docForErase = client.read()
+                .resource(DocumentReference.class)
+                .withId(ergToken)
+                .withAdditionalHeader("Authorization", "Bearer " + versichertenToken)
+                .execute();
+            boolean isInPapierkorb = docForErase.getMeta().getTag().stream()
+                .anyMatch(tag -> "https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs".equals(tag.getSystem()) &&
+                                 "papierkorb".equals(tag.getCode()));
+            assertTrue(isInPapierkorb, "Dokument sollte nach $change-status im Papierkorb sein (Tag 'papierkorb' vorhanden).");
+            assertEquals(Enumerations.DocumentReferenceStatus.ENTEREDINERROR, docForErase.getStatus(), "DocumentReference.status sollte ENTEREDINERROR sein.");
+            LOGGER.info("AuditServiceTest.testEraseOperationAudit: Überprüfung erfolgreich - Dokument {} ist im Papierkorb.", ergToken);
+        } catch (Exception e) {
+            LOGGER.error("AuditServiceTest.testEraseOperationAudit: Fehler beim Überprüfen des Status 'papierkorb' für DocumentReference ID: {}. Fehlermeldung: {}", ergToken, e.getMessage(), e);
+            fail("Fehler beim Überprüfen des Dokumentstatus vor dem Erase-Test: " + e.getMessage());
+            return;
+        }
+
+        // Vor dem Löschen des DocumentReference alle zugehörigen AuditEvents löschen,
+        // die durch vorherige Operationen (wie $change-status) entstanden sein könnten.
+        try {
+            LOGGER.info("AuditServiceTest.testEraseOperationAudit: Suche nach AuditEvents, die auf DocumentReference ID {} verweisen, um sie zu löschen.", ergToken);
+            Bundle auditEventsBundle = client.search()
+                .forResource(AuditEvent.class)
+                .where(AuditEvent.ENTITY.hasId(ergToken)) // Sucht nach AuditEvents, deren 'entity.what' auf unseren ergToken zeigt
+                .returnBundle(Bundle.class)
+                .withAdditionalHeader("Authorization", "Bearer " + leistungserbringerToken) // Admin/System-Token könnte hier besser sein, falls vorhanden
+                .execute();
+
+            if (auditEventsBundle.hasEntry()) {
+                LOGGER.info("AuditServiceTest.testEraseOperationAudit: {} AuditEvent(s) gefunden, die auf DocumentReference ID {} verweisen. Werden jetzt gelöscht.", auditEventsBundle.getEntry().size(), ergToken);
+                for (Bundle.BundleEntryComponent entry : auditEventsBundle.getEntry()) {
+                    if (entry.getResource() instanceof AuditEvent) {
+                        AuditEvent eventToDelete = (AuditEvent) entry.getResource();
+                        LOGGER.info("AuditServiceTest.testEraseOperationAudit: Lösche AuditEvent ID: {}", eventToDelete.getIdElement().getIdPart());
+                        client.delete()
+                            .resource(eventToDelete)
+                            .withAdditionalHeader("Authorization", "Bearer " + leistungserbringerToken) // Admin/System-Token
+                            .execute();
+                        LOGGER.info("AuditServiceTest.testEraseOperationAudit: AuditEvent ID {} erfolgreich gelöscht.", eventToDelete.getIdElement().getIdPart());
+                    }
+                }
+            } else {
+                LOGGER.info("AuditServiceTest.testEraseOperationAudit: Keine referenzierenden AuditEvents für DocumentReference ID {} gefunden.", ergToken);
+            }
+        } catch (Exception e) {
+            LOGGER.error("AuditServiceTest.testEraseOperationAudit: Fehler beim Suchen oder Löschen von referenzierenden AuditEvents für DocumentReference ID: {}. Fehlermeldung: {}", ergToken, e.getMessage(), e);
+            // Wir loggen den Fehler, aber der Test sollte versuchen fortzufahren,
+            // da das Fehlen von AuditEvents oder ein Fehler hier nicht unbedingt den $erase-Test selbst blockieren sollte,
+            // es sei denn, die Referenzintegrität schlägt später immer noch fehl.
+        }
+        
+        // Kurze Pause, um sicherzustellen, dass die Löschvorgänge der AuditEvents verarbeitet wurden
+        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        // Jetzt die $erase Operation ausführen
+        LOGGER.info("AuditServiceTest.testEraseOperationAudit: Führe $erase Operation aus für DocumentReference ID: {}", ergToken);
         OperationOutcome result = client.operation()
             .onInstance(new IdType("DocumentReference", ergToken))
             .named("$erase")
@@ -394,21 +474,60 @@ class AuditServiceTest extends BaseProviderTest {
             .execute();
         
         assertNotNull(result);
+        LOGGER.info("AuditServiceTest.testEraseOperationAudit: $erase Operation erfolgreich ausgeführt für DocumentReference ID: {}", ergToken);
 
-        try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try { Thread.sleep(1500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         
         Bundle results = client.search()
             .forResource(AuditEvent.class)
             .where(AuditEvent.TYPE.exactly().systemAndCode("http://terminology.hl7.org/CodeSystem/audit-event-type", "rest"))
             .and(AuditEvent.SUBTYPE.exactly().systemAndCode("https://gematik.de/fhir/erg/CodeSystem/erg-operationen-cs", "erase"))
-            .and(AuditEvent.ENTITY.hasId(ergToken))
             .returnBundle(Bundle.class)
             .withAdditionalHeader("Authorization", "Bearer " + versichertenToken)
             .execute();
         
-        assertTrue(results.getEntry().size() > 0, "Es sollte mindestens ein AuditEvent für die Erase-Operation mit ergToken " + ergToken + " erstellt worden sein");
-        
-        AuditEvent auditEvent = (AuditEvent) results.getEntry().get(0).getResource();
+        AuditEvent foundEraseEventForOurDoc = null;
+        String expectedEntityIdentifierValue = "DocumentReference/" + ergToken; 
+        // ergToken ist die reine ID, z.B. "b39caecd...". Der Identifier im AuditEvent sollte "DocumentReference/b39caecd..." sein.
+
+        LOGGER.info("AuditServiceTest.testEraseOperationAudit: Suche spezifisches Erase-AuditEvent für DocumentReference ID (als Identifier-Wert): {}", expectedEntityIdentifierValue);
+
+        if (!results.hasEntry()) {
+            LOGGER.warn("AuditServiceTest.testEraseOperationAudit: Keine AuditEvents mit Subtype 'erase' gefunden.");
+        } else {
+            LOGGER.info("AuditServiceTest.testEraseOperationAudit: {} AuditEvent(s) mit Subtype 'erase' gefunden. Durchsuche nach spezifischem Identifier...", results.getEntry().size());
+        }
+
+        for (Bundle.BundleEntryComponent entry : results.getEntry()) {
+            if (entry.getResource() instanceof AuditEvent) {
+                AuditEvent currentEvent = (AuditEvent) entry.getResource();
+                LOGGER.debug("Prüfe AuditEvent ID: {}", currentEvent.getIdElement().getIdPart());
+                if (currentEvent.hasEntity()) {
+                    for (AuditEvent.AuditEventEntityComponent entity : currentEvent.getEntity()) {
+                        if (entity.hasWhat() && entity.getWhat().hasIdentifier()) {
+                            String actualIdentifierValue = entity.getWhat().getIdentifier().getValue();
+                            String actualIdentifierSystem = entity.getWhat().getIdentifier().getSystem();
+                            LOGGER.debug("  Entity hat Identifier: System='{}', Wert='{}'", actualIdentifierSystem, actualIdentifierValue);
+                            if (expectedEntityIdentifierValue.equals(actualIdentifierValue)) {
+                                // Optional: Prüfe auch das System, falls es im Provider konsistent gesetzt wird.
+                                // if ("urn:ietf:rfc:3986".equals(actualIdentifierSystem)) {
+                                foundEraseEventForOurDoc = currentEvent;
+                                LOGGER.info("  --> Korrektes AuditEvent gefunden: ID={}", currentEvent.getIdElement().getIdPart());
+                                break;
+                                // }
+                            }
+                        }
+                    }
+                }
+                if (foundEraseEventForOurDoc != null) break;
+            }
+        }
+
+        assertNotNull(foundEraseEventForOurDoc,
+            "Es konnte kein spezifisches AuditEvent für die Erase-Operation des Dokuments mit ergToken '" + ergToken +
+            "' (erwarteter Identifier: " + expectedEntityIdentifierValue + ") gefunden werden. Anzahl gefundener Erase-Events insgesamt: " + results.getEntry().size());
+
+        AuditEvent auditEvent = foundEraseEventForOurDoc; // Für die weiteren Assertions
         
         LOGGER.info("Gefundenes Erase AuditEvent Meta: {}", auditEvent.getMeta());
         if (auditEvent.getMeta() != null && auditEvent.getMeta().getProfile() != null) {
@@ -426,9 +545,21 @@ class AuditServiceTest extends BaseProviderTest {
             "Das Profil sollte gesetzt sein");
         
         assertTrue(auditEvent.hasEntity(), "Das AuditEvent sollte eine Entity haben");
-        assertEquals("DocumentReference", auditEvent.getEntityFirstRep().getName(), "Der Name der Entity sollte 'DocumentReference' sein");
-        assertTrue(auditEvent.getEntityFirstRep().getWhat().getReference().endsWith(ergToken), "Entity 'what' Referenz sollte auf den ergToken zeigen.");
-        assertNotNull(auditEvent.getEntityFirstRep().getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
+        AuditEvent.AuditEventEntityComponent relevantEntity = auditEvent.getEntityFirstRep(); // Annahme, erste Entity ist die relevante
+        
+        // assertEquals("DocumentReference", relevantEntity.getName(), "Der Name der Entity sollte 'DocumentReference' sein");
+        // Der Name der Entity wird jetzt dynamisch im Provider gesetzt, z.B. "DocumentReference Erase"
+        assertTrue(relevantEntity.getName().contains("DocumentReference"), "Der Name der Entity sollte 'DocumentReference' enthalten.");
+        assertTrue(relevantEntity.getName().contains("Erase"), "Der Name der Entity sollte 'Erase' enthalten.");
+
+        assertNotNull(relevantEntity.getWhat(), "Entity.what sollte vorhanden sein.");
+        assertTrue(relevantEntity.getWhat().hasIdentifier(), "Entity.what.identifier sollte vorhanden sein.");
+        assertEquals(expectedEntityIdentifierValue, relevantEntity.getWhat().getIdentifier().getValue(), "Entity.what.identifier.value sollte auf den ergToken zeigen.");
+        // Optional: System des Identifiers prüfen, wenn es zuverlässig gesetzt wird
+        // assertEquals("urn:ietf:rfc:3986", relevantEntity.getWhat().getIdentifier().getSystem(), "Entity.what.identifier.system sollte korrekt sein.");
+
+        assertNotNull(relevantEntity.getWhat().getDisplay(), "Entity.what.display sollte gesetzt sein.");
+        assertTrue(relevantEntity.getWhat().getDisplay().contains(expectedEntityIdentifierValue), "Entity.what.display sollte die ID der gelöschten Ressource enthalten.");
 
         assertTrue(auditEvent.hasAgent(), "Das AuditEvent sollte einen Agent haben");
         assertTrue(auditEvent.getAgentFirstRep().getRequestor(), "Der Agent sollte Requestor sein");

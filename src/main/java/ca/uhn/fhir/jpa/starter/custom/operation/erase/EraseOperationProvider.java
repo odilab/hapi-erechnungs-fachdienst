@@ -14,6 +14,7 @@ import org.hl7.fhir.r4.model.OperationOutcome;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
 import org.hl7.fhir.r4.model.AuditEvent;
 import org.hl7.fhir.r4.model.Reference;
+import org.hl7.fhir.r4.model.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,7 +68,9 @@ public class EraseOperationProvider implements IResourceProvider {
         authorizationService.validateDocumentAccess(documentReference, accessToken); 
 
         // Speichere die ID und Subject Referenz für das Audit-Log, bevor die documentReference gelöscht wird
-        String erasedDocumentId = documentReference.getIdElement().toVersionless().getValue();
+        String erasedDocumentIdString = documentReference.getIdElement().toVersionless().getValue(); // z.B. "DocumentReference/xyz"
+        IdType parsedErasedId = new IdType(erasedDocumentIdString); // Parsen, um Teile wie Ressourcentyp und ID zu bekommen
+
         Reference patientRefForAudit = null;
         if (documentReference.getSubject() != null && documentReference.getSubject().getReferenceElement().getResourceType().equals("Patient")) {
             patientRefForAudit = documentReference.getSubject().copy(); // Kopieren, da Original bald weg sein könnte
@@ -77,20 +80,41 @@ public class EraseOperationProvider implements IResourceProvider {
         eraseService.eraseDocumentReferenceAndAssociations(documentReference, accessToken);
 
         // 5. Audit-Log Eintrag erstellen
+        AuditEvent createdAuditEvent = null;
         try {
             String kvnr = accessToken.getKvnr().orElse(accessToken.getIdNumber());
-            auditService.createRestAuditEvent(
+
+            Reference whatForAuditEvent = new Reference();
+            // Setze den Identifier, um die gelöschte Ressource eindeutig zu kennzeichnen.
+            // Das System "urn:ietf:rfc:3986" ist ein allgemeiner URN-Namespace.
+            // Der Wert ist die vollständige ID der gelöschten Ressource (z.B. "DocumentReference/xyz").
+            whatForAuditEvent.setIdentifier(new Identifier()
+                .setSystem("urn:ietf:rfc:3986") // Oder ein spezifischeres System, falls definiert
+                .setValue(erasedDocumentIdString));
+            whatForAuditEvent.setDisplay("Gelöschte Ressource: " + erasedDocumentIdString);
+            // Die .reference Komponente wird bewusst nicht gesetzt oder auf null gelassen,
+            // da die Ressource nicht mehr existiert und dies Validierungsfehler vermeiden kann.
+
+            createdAuditEvent = auditService.createRestAuditEvent(
                 AuditEvent.AuditEventAction.D, // D für Delete
                 "erase", // Korrekter Subtype-Code
                 AuditEvent.AuditEventOutcome._0, // Erfolg
-                new Reference("DocumentReference/" + erasedDocumentId), // Referenz auf das gelöschte Dokument
-                "DocumentReference Erase", // Resource Name
-                "DocumentReference/" + erasedDocumentId, // entityWhatDisplay
-                "DocumentReference mit ID '" + erasedDocumentId + "' gelöscht durch Versicherten.",
+                whatForAuditEvent, // Die modifizierte Referenz, die primär auf Identifier basiert
+                parsedErasedId.getResourceType() + " Erase", // entity.name, z.B. "DocumentReference Erase"
+                erasedDocumentIdString, // entityWhatDisplay (kann auch der Display-Text von whatForAuditEvent sein)
+                "Ressource vom Typ '" + parsedErasedId.getResourceType() + "' mit ID '" + parsedErasedId.getIdPart() + "' gelöscht durch Versicherten.", // AuditEvent.entity.description
                 accessToken.getIdNumber(), // actorName
                 kvnr, // actorId (KVNR des Versicherten)
                 patientRefForAudit // patientReference für Versicherter-Slice
             );
+
+            if (createdAuditEvent != null && createdAuditEvent.hasId()) {
+                LOGGER.info("EraseOperationProvider: AuditEvent für Erase-Operation erfolgreich erstellt und gespeichert mit ID: {}", createdAuditEvent.getIdElement().toUnqualifiedVersionless().getValue());
+            } else if (createdAuditEvent != null) {
+                LOGGER.warn("EraseOperationProvider: AuditEvent für Erase-Operation erstellt, aber es hat keine ID (möglicherweise nicht gespeichert).");
+            } else {
+                LOGGER.warn("EraseOperationProvider: AuditEvent für Erase-Operation konnte nicht erstellt werden (auditService.createRestAuditEvent gab null zurück).");
+            }
         } catch (Exception e) {
             LOGGER.error("Fehler beim Erstellen des AuditEvents für EraseOperation: {}", e.getMessage(), e);
             // Die Hauptoperation sollte hierdurch nicht fehlschlagen
