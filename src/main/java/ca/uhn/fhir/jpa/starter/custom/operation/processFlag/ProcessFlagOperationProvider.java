@@ -104,11 +104,9 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
         AccessToken accessToken = authorizationService.validateAndExtractAccessToken(theRequestDetails);
         authorizationService.authorizeAccessBasedOnContext(accessToken, theRequestDetails); // Stellt sicher, dass Nutzer und Scope passen
 
-        // 3. Suche das Dokument anhand des Tokens (ID)
-        DocumentReference document = processFlagService.findDocumentByToken(documentToken);
-        if (document == null) {
-            throw new ResourceNotFoundException("Kein Dokument mit Token (ID) " + documentToken + " gefunden");
-        }
+        // 3. Suche das Dokument anhand des Tokens (ID) über den DocumentRetrievalService
+        DocumentReference document = documentRetrievalService.findDocument(documentToken);
+        
 
         // 4. Prüfe, ob der Nutzer berechtigt ist, auf DIESES Dokument zuzugreifen
         authorizationService.validateDocumentAccess(document, accessToken);

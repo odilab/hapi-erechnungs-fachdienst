@@ -10,74 +10,16 @@ import org.springframework.stereotype.Service;
 import java.util.Date;
 import java.util.List;
 
-// Imports für die kopierte Suchlogik
-import ca.uhn.fhir.jpa.searchparam.SearchParameterMap;
-import ca.uhn.fhir.rest.api.server.IBundleProvider;
-import ca.uhn.fhir.rest.param.TokenParam;
-import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
-import org.hl7.fhir.instance.model.api.IBaseResource;
-import ca.uhn.fhir.context.FhirContext;
-
 @Service
 public class ProcessFlagService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ProcessFlagService.class);
 
     private final DaoRegistry daoRegistry;
-    private final FhirContext fhirContext; // Hinzufügen für Suchlogik
 
     @Autowired
-    public ProcessFlagService(DaoRegistry daoRegistry, FhirContext fhirContext) { // FhirContext hinzufügen
+    public ProcessFlagService(DaoRegistry daoRegistry) {
         this.daoRegistry = daoRegistry;
-        this.fhirContext = fhirContext; // Initialisieren
-    }
-
-    /**
-     * Sucht ein Dokument anhand des Tokens (das als ID oder Identifier verwendet wird).
-     * Diese Methode wurde aus DocumentRetrievalService kopiert, um Abhängigkeiten zu reduzieren.
-     *
-     * @param token Der Token (oft die logische ID oder ein Identifier-Wert) des Dokuments.
-     * @return Das gefundene DocumentReference oder null.
-     */
-    public DocumentReference findDocumentByToken(String token) {
-        LOGGER.info("Suche Dokument mit Token: {}", token);
-
-        // VERSUCH 1: Direkter Lesezugriff über ID (wenn der Token die logische ID ist)
-        try {
-            IdType docId = new IdType("DocumentReference", token);
-            DocumentReference document = daoRegistry.getResourceDao(DocumentReference.class).read(docId);
-            if (document != null) {
-                LOGGER.info("Dokument direkt via ID (Token) {} gefunden.", token);
-                logDocumentDetails(document, token); // Log-Detail hinzugefügt
-                return document;
-            }
-        } catch (ResourceNotFoundException e) {
-            LOGGER.info("Dokument mit ID (Token) {} nicht gefunden (ResourceNotFoundException), versuche Identifier-Suche.", token);
-        } catch (Exception e) {
-            LOGGER.warn("Unerwarteter Fehler beim direkten Lesen der DocumentReference mit ID (Token) {}: {}. Versuche Identifier-Suche.", token, e.getMessage(), e);
-        }
-
-        // VERSUCH 2: Suche über Identifier mit spezifischem System
-        DocumentReference document = findDocumentByIdentifierWithSystem(token, "https://gematik.de/fhir/sid/erg-token");
-        if (document != null) {
-            return document;
-        }
-
-        // VERSUCH 3: Suche über Identifier ohne Systemangabe
-        document = findDocumentByIdentifierWithoutSystem(token);
-        if (document != null) {
-            return document;
-        }
-
-        // VERSUCH 4: Fallback - Durchsuche alle Dokumente und filtere manuell
-        document = findDocumentByManualFiltering(token);
-
-        if (document == null) {
-            LOGGER.warn("Kein Dokument mit Token {} nach allen Suchstrategien gefunden.", token);
-            // Hier keine Exception werfen, der Aufrufer (Provider) entscheidet, wie damit umzugehen ist.
-        }
-
-        return document;
     }
 
     /**
@@ -151,75 +93,5 @@ public class ProcessFlagService {
             throw new RuntimeException("Fehler beim Speichern des aktualisierten DocumentReference");
         }
         return savedDocument;
-    }
-
-    // --- Private Hilfsmethoden für findDocumentByToken (kopiert aus DocumentRetrievalService) ---
-
-    private DocumentReference findDocumentByIdentifierWithSystem(String token, String system) {
-        LOGGER.info("Versuche Suche via Identifier mit spezifischem System: {} und Wert: {}", system, token);
-        SearchParameterMap paramMap = new SearchParameterMap();
-        paramMap.add(DocumentReference.SP_IDENTIFIER, new TokenParam(system, token));
-
-        IBundleProvider results = daoRegistry.getResourceDao(DocumentReference.class).search(paramMap);
-
-        if (results.size() > 0) {
-            LOGGER.info("Dokument mit spezifischem Identifier-System und Token-Wert gefunden. Anzahl: {}", results.size());
-            return (DocumentReference) results.getResources(0, 1).get(0);
-        }
-
-        LOGGER.info("Kein Dokument mit spezifischem Identifier-System ({}) und Wert {} gefunden.", system, token);
-        return null;
-    }
-
-    private DocumentReference findDocumentByIdentifierWithoutSystem(String token) {
-        LOGGER.info("Versuche Suche via Identifier ohne spezifisches System, nur mit Wert: {}", token);
-        SearchParameterMap paramMap = new SearchParameterMap();
-        paramMap.add(DocumentReference.SP_IDENTIFIER, new TokenParam(null, token));
-
-        IBundleProvider results = daoRegistry.getResourceDao(DocumentReference.class).search(paramMap);
-
-        if (results.size() > 0) {
-            LOGGER.info("Dokument mit Identifier (nur Wert) gefunden. Anzahl: {}", results.size());
-            return (DocumentReference) results.getResources(0, 1).get(0);
-        }
-
-        LOGGER.info("Kein Dokument mit Identifier (nur Wert) {} gefunden.", token);
-        return null;
-    }
-
-    private DocumentReference findDocumentByManualFiltering(String token) {
-        LOGGER.warn("Letzter Versuch: Durchsuche ALLE DocumentReference-Ressourcen und filtere manuell nach dem Token '{}' im Identifier.", token);
-        SearchParameterMap paramMap = new SearchParameterMap(); // Leere Map, um alle Ressourcen zu laden
-        IBundleProvider results = daoRegistry.getResourceDao(DocumentReference.class).search(paramMap);
-
-        Integer resultSize = results.size();
-        LOGGER.info("Gesamtzahl der DocumentReference-Ressourcen für manuelles Filtern: {}", resultSize != null ? resultSize : "(unbekannt/null)");
-
-        if (resultSize != null && resultSize > 0) {
-            List<IBaseResource> allDocs = results.getResources(0, resultSize);
-            for (IBaseResource res : allDocs) {
-                DocumentReference doc = (DocumentReference) res;
-                for (Identifier identifier : doc.getIdentifier()) {
-                    if (token.equals(identifier.getValue())) {
-                        LOGGER.info("Dokument mit passendem Token-Wert '{}' im Identifier bei manueller Iteration gefunden. DocumentReference ID: {}", token, doc.getIdElement().toUnqualifiedVersionless().getValue());
-                        return doc;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private void logDocumentDetails(DocumentReference document, String token) {
-        // Loggen des Dokuments nur bei Bedarf und wenn Debugging aktiv ist
-        if (LOGGER.isDebugEnabled()) {
-            try {
-                String documentAsJson = fhirContext.newJsonParser().setPrettyPrint(true).encodeResourceToString(document);
-                LOGGER.debug("Vollständiger Inhalt der via ID (Token) {} abgerufenen DocumentReference:\n{}", token, documentAsJson);
-            } catch (Exception e) {
-                LOGGER.debug("Fehler beim Serialisieren des Dokuments für Debug-Log: {}", e.getMessage());
-            }
-        }
     }
 } 
