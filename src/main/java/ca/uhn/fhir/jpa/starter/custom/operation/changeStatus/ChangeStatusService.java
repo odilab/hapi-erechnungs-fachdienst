@@ -7,9 +7,7 @@ import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.DocumentRetrievalService;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
-import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
-import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,7 +57,7 @@ public class ChangeStatusService {
 
         // 1. Lade das Dokument über den DocumentRetrievalService, wobei documentId.getIdPart() der Token ist.
         // Beachte: documentId enthält bereits den Typ "DocumentReference", findDocumentByToken erwartet aber nur die ID.
-        DocumentReference document = documentRetrievalService.findDocumentByToken(documentId.getIdPart());
+        DocumentReference document = documentRetrievalService.findDocument(documentId.getIdPart());
 
         // 2. Prüfe Zugriff auf das Dokument
         authorizationService.validateDocumentAccess(document, accessToken);
@@ -152,7 +150,7 @@ public class ChangeStatusService {
 
         // Stelle sicher, dass wir die aktuellste Version für die Meta-Operationen haben
         // Hier brauchen wir wieder die ID, da findDocumentByToken nur den ID-String nimmt.
-        DocumentReference currentSavedDoc = documentRetrievalService.findDocumentByToken(savedDocument.getIdElement().getIdPart());
+        DocumentReference currentSavedDoc = documentRetrievalService.findDocument(savedDocument.getIdElement().getIdPart());
 
         // 4. Entferne alte Status-Tags via $meta-delete
         removeAllStatusTags(currentSavedDoc);
@@ -162,7 +160,7 @@ public class ChangeStatusService {
 
         // 6. Lese das finale Dokument mit allen Änderungen (Status, Extensions, Meta-Tags)
         // Erneutes Laden über die ID.
-        DocumentReference finalDocument = documentRetrievalService.findDocumentByToken(currentSavedDoc.getIdElement().getIdPart());
+        DocumentReference finalDocument = documentRetrievalService.findDocument(currentSavedDoc.getIdElement().getIdPart());
 
         LOGGER.info("Dokument {} erfolgreich aktualisiert: Status={}, Version={}, Tags={}",
                 finalDocument.getIdElement().getIdPart(),

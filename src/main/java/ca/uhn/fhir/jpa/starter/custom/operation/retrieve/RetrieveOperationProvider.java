@@ -81,7 +81,7 @@ public class RetrieveOperationProvider implements IResourceProvider {
         authorizationService.authorizeAccessBasedOnContext(accessToken, theRequestDetails);
 
         // Suche das Dokument anhand des Tokens
-        DocumentReference document = documentRetrievalService.findDocumentByToken(token.getValue());
+        DocumentReference document = documentRetrievalService.findDocument(token.getValue());
         if (document == null) {
             throw new ResourceNotFoundException("Kein Dokument mit Token " + token.getValue() + " gefunden");
         }

@@ -39,7 +39,7 @@ public class DocumentRetrievalService {
     /**
      * Sucht ein Dokument anhand des Tokens, wobei angenommen wird, dass der Token die logische ID ist.
      */
-    public DocumentReference findDocumentByToken(String token) {
+    public DocumentReference findDocument(String token) {
         LOGGER.info("Suche Dokument direkt via ID (Token): {}", token);
 
         try {
