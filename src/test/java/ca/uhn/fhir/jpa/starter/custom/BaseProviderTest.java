@@ -40,7 +40,7 @@ import static ca.uhn.fhir.jpa.starter.custom.ErgTestResourceUtil.*;
 }, properties = {
     //"hapi.fhir.custom-bean-packages=ca.uhn.fhir.jpa.starter.custom.interceptor,ca.uhn.fhir.jpa.starter.custom.operation",
     "hapi.fhir.custom-interceptor-classes=ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AuthenticationInterceptor,ca.uhn.fhir.jpa.starter.custom.interceptor.auth.ResourceAuthorizationInterceptor",
-    "hapi.fhir.custom-provider-classes=ca.uhn.fhir.jpa.starter.custom.operation.submit.SubmitOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.retrieve.RetrieveOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.processFlag.ProcessFlagOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.changeStatus.ChangeStatusOperationProvider",
+    "hapi.fhir.custom-provider-classes=ca.uhn.fhir.jpa.starter.custom.operation.submit.SubmitOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.retrieve.RetrieveOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.processFlag.ProcessFlagOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.changeStatus.ChangeStatusOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.erase.EraseOperationProvider",
     "spring.datasource.url=jdbc:h2:mem:dbr4",
     "hapi.fhir.cr_enabled=false",
     "hapi.fhir.fhir_version=r4",
