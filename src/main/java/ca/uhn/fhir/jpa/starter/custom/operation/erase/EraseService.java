@@ -22,8 +22,6 @@ public class EraseService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EraseService.class);
     private static final String RECHNUNGSSTATUS_SYSTEM = "https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsstatus-cs";
-    // Der genaue Code für "Papierkorb" sollte hier basierend auf der Spezifikation stehen.
-    // Annahme aus erase.txt: "papierkorb"
     private static final String RECHNUNGSSTATUS_CODE_PAPIERKORB = "papierkorb";
     private static final String RELATES_TO_CODE_TRANSFORMS = "transforms";
 
