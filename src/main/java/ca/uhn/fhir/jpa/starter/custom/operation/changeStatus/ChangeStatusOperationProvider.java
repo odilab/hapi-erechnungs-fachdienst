@@ -101,18 +101,12 @@ public class ChangeStatusOperationProvider implements IResourceProvider {
         AccessToken accessToken = authorizationService.authorizeChangeStatusOperation(theRequestDetails);
 
         // 2. Lade das Dokument direkt über DocumentRetrievalService
-        // ResourceNotFoundException wird von documentRetrievalService geworfen, falls nichts gefunden wird.
         DocumentReference document = documentRetrievalService.findDocument(id.getIdPart());
         
         // Ermittle den alten Status für das Audit-Log, BEVOR er geändert wird.
-        // Annahme: Der Status ist in einem Tag der Meta-Informationen gespeichert.
-        // Dies ist eine vereinfachte Annahme und muss an Ihre tatsächliche Status-Speicherlogik angepasst werden!
         String alterStatusValue = "UNBEKANNT"; // Fallback
         if (document.getMeta() != null && document.getMeta().getTag() != null) {
             // Suchen Sie hier nach dem spezifischen Tag, das Ihren Status repräsentiert.
-            // Beispiel: Annahme, es ist ein Tag mit einem bestimmten System.
-            // Für dieses Beispiel nehmen wir an, der erste gefundene Tag-Code ist der Status.
-            // In einer echten Implementierung wäre hier eine robustere Logik nötig.
             for (Coding metaTag : document.getMeta().getTag()) {
                 // Beispiel: if ("https://IhrSystem.de/CodeSystem/status".equals(metaTag.getSystem())) {
                 if (VALID_STATUS_CODES.contains(metaTag.getCode())) { // Prüfen, ob der Code ein valider Status ist

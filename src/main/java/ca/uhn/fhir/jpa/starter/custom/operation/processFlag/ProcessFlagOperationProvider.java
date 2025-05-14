@@ -153,11 +153,23 @@ public class ProcessFlagOperationProvider implements IResourceProvider {
                 if (markierung.getDisplay() != null) {
                     auditService.addEntityDetail(auditEvent, "markierung-display", markierung.getDisplay());
                 }
+                
                 // Ggf. weitere Details wie 'gelesen' oder 'artDerArchivierung' hinzufügen, falls relevant und im Audit benötigt
-                // Beispiel für 'gelesen', falls es als separates Detail geloggt werden soll:
-                // if (gelesen != null) { 
-                //     auditService.addEntityDetail(auditEvent, "markierung-gelesen-status", gelesen.getValueAsString());
-                // }
+                if (gelesen != null && gelesen.hasValue()) { 
+                    auditService.addEntityDetail(auditEvent, "markierung-gelesen-status", gelesen.getValueAsString());
+                }
+                if (artDerArchivierung != null) { // artDerArchivierung ist vom Typ Coding
+                    // Logge System, Code und Display der Archivierungsart, falls vorhanden
+                    if (artDerArchivierung.hasSystem()) {
+                        auditService.addEntityDetail(auditEvent, "archivierung-system", artDerArchivierung.getSystem());
+                    }
+                    if (artDerArchivierung.hasCode()) {
+                        auditService.addEntityDetail(auditEvent, "archivierung-code", artDerArchivierung.getCode());
+                    }
+                    if (artDerArchivierung.hasDisplay()) {
+                        auditService.addEntityDetail(auditEvent, "archivierung-display", artDerArchivierung.getDisplay());
+                    }
+                }
             }
 
         } catch (Exception e) {
