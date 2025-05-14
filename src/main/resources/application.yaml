@@ -40,11 +40,10 @@ spring:
     baselineOnMigrate: true
     fail-on-missing-locations: false
   datasource:
-    #url: 'jdbc:h2:file:./target/database/h2'
-    url: jdbc:h2:mem:test_mem
-    username: sa
-    password: null
-    driverClassName: org.h2.Driver
+    url: jdbc:postgresql://localhost:5432/hapi
+    username: admin
+    password: admin
+    driverClassName: org.postgresql.Driver
     max-active: 15
 
     # database connection pool size
@@ -58,7 +57,7 @@ spring:
       #Hibernate dialect is automatically detected except Postgres and H2.
       #If using H2, then supply the value of ca.uhn.fhir.jpa.model.dialect.HapiFhirH2Dialect
       #If using postgres, then supply the value of ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
-      hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirH2Dialect
+      hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
   #      hibernate.hbm2ddl.auto: update
   #      hibernate.jdbc.batch_size: 20
   #      hibernate.cache.use_query_cache: false
@@ -207,7 +206,7 @@ hapi:
     #    enforce_referential_integrity_on_write: false
     #    etag_support_enabled: true
     #    expunge_enabled: true
-    #    client_id_strategy: ALPHANUMERIC
+    client_id_strategy: ANY
     #    server_id_strategy: SEQUENTIAL_NUMERIC
     #    fhirpath_interceptor_enabled: false
     #    filter_search_enabled: true
@@ -266,49 +265,11 @@ hapi:
     # comma-separated list of fully qualified interceptor classes. 
     # classes listed here will be fetched from the Spring context when combined with 'custom-bean-packages', 
     # or will be instantiated via reflection using an no-arg contructor; then registered with the server  
-    #custom-interceptor-classes:  
-
-    # comma-separated list of fully qualified provider classes. 
-    # classes listed here will be fetched from the Spring context when combined with 'custom-bean-packages', 
-    # or will be instantiated via reflection using an no-arg contructor; then registered with the server  
-    #custom-provider-classes:  
-    
-    # Threadpool size for BATCH'ed GETs in a bundle.
-    #    bundle_batch_pool_size: 10
-    #    bundle_batch_pool_max_size: 50
-
-    #    logger:
-    #      error_format: 'ERROR - ${requestVerb} ${requestUrl}'
-    #      format: >-
-    #        Path[${servletPath}] Source[${requestHeader.x-forwarded-for}]
-    #        Operation[${operationType} ${operationName} ${idOrResourceName}]
-    #        UA[${requestHeader.user-agent}] Params[${requestParameters}]
-    #        ResponseEncoding[${responseEncodingNoDefault}]
-    #      log_exceptions: true
-    #      name: fhirtest.access
-    #    max_binary_size: 104857600
-    #    max_page_size: 200
-    #    retain_cached_searches_mins: 60
-    #    reuse_cached_search_results_millis: 60000
-    tester:
-      home:
-        name: Local Tester
-        server_address: 'http://localhost:8080/fhir'
-        refuse_to_fetch_third_party_urls: false
-        fhir_version: R4
-      global:
-        name: Global Tester
-        server_address: "http://hapi.fhir.org/baseR4"
-        refuse_to_fetch_third_party_urls: false
-        fhir_version: R4
-    #    validation:
-    #      requests_enabled: true
-    #      responses_enabled: true
-    #    binary_storage_enabled: true
-    inline_resource_storage_below_size: 4000
-    custom-bean-packages: ca.uhn.fhir.jpa.starter.custom.interceptor,ca.uhn.fhir.jpa.starter.custom.interceptor.auth
-    custom-interceptor-classes: ca.uhn.fhir.jpa.starter.custom.interceptor.CustomValidator,ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AuthenticationInterceptor,ca.uhn.fhir.jpa.starter.custom.interceptor.auth.ResourceAuthorizationInterceptor
-    custom-provider-classes:
+    custom-interceptor-classes: ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AuthenticationInterceptor,ca.uhn.fhir.jpa.starter.custom.interceptor.auth.ResourceAuthorizationInterceptor
+    custom-provider-classes: ca.uhn.fhir.jpa.starter.custom.operation.submit.SubmitOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.retrieve.RetrieveOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.processFlag.ProcessFlagOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.changeStatus.ChangeStatusOperationProvider,ca.uhn.fhir.jpa.starter.custom.operation.erase.EraseOperationProvider
+    auth:
+      discovery_url: https://localhost:10000/.well-known/openid-configuration
+      update_interval_seconds: 43200
 #    bulk_export_enabled: true
 #    subscription:
 #      resthook_enabled: true
