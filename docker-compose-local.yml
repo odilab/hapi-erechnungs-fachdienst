@@ -1,7 +1,7 @@
 services:
   idp-server:
     hostname: idp-server
-    container_name: idp-server2
+    container_name: idp-server3
     image: ghcr.io/odilab/ipd-server/idp-server:latest
     entrypoint: ["java","-Dspring.profiles.active=ssl","-jar","/app/idp-server-19.1.0.jar"]
     ports:
@@ -10,7 +10,7 @@ services:
       - e_rezept_services_default
   erp-service:
     hostname: erp-service
-    container_name: erp-service
+    container_name: erp-service3
     image: ghcr.io/odilab/spring-erp-services/erp-service:latest
     entrypoint: ["java","-Dspring.profiles.active=ssl","-jar","/app/app.jar"]
     environment:
