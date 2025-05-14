@@ -17,6 +17,13 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
+// Neue Imports für Dateioperationen
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.io.FileWriter;
+import java.io.File;
+
 /**
  * Utility-Klasse für die Erstellung von FHIR-Testressourcen gemäß ERG-Profilen
  */
@@ -839,5 +846,103 @@ public class ErgTestResourceUtil {
             .setData(encodeToBase64("DIESISTNUREINBEISPIELDIESISTKEINVALIDESPDF00".getBytes()));
 
         return anhang;
+    }
+
+    /**
+     * Generiert alle Testressourcen und speichert sie als JSON-Dateien.
+     * Die Dateien werden im Verzeichnis 'src/test/resources/generated-test-resources' abgelegt.
+     */
+    public static void generateAndSaveAllTestResourcesAsJson() {
+        FhirContext ctx = FhirContext.forR4();
+        String outputDirPath = "src/test/resources/generated-test-resources";
+
+        try {
+            // Erstelle das Ausgabe-Verzeichnis, falls es nicht existiert
+            Path outputPath = Paths.get(outputDirPath);
+            if (!Files.exists(outputPath)) {
+                Files.createDirectories(outputPath);
+            }
+
+            // Patient erstellen
+            Patient patient = createTestErgPatient();
+            saveResourceToJson(ctx, patient, outputPath.resolve("erg-patient.json"));
+
+            // Practitioner erstellen
+            Practitioner practitioner = createTestErgPractitioner();
+            saveResourceToJson(ctx, practitioner, outputPath.resolve("erg-practitioner.json"));
+
+            // Institution erstellen
+            Organization institution = createTestErgInstitution();
+            saveResourceToJson(ctx, institution, outputPath.resolve("erg-institution.json"));
+
+            // ChargeItem erstellen (benötigt Patient)
+            ChargeItem chargeItem = createMinimalChargeItem(patient);
+            saveResourceToJson(ctx, chargeItem, outputPath.resolve("erg-minimal-chargeitem.json"));
+
+            // Invoice erstellen (benötigt Patient, Practitioner, Institution, ChargeItem)
+            Invoice invoice = createValidErgInvoice(patient, practitioner, institution, chargeItem);
+            saveResourceToJson(ctx, invoice, outputPath.resolve("erg-invoice.json"));
+
+            // PDF aus Invoice erstellen und speichern
+            byte[] pdfData = createPdfFromInvoice(invoice);
+            Path pdfPath = outputPath.resolve("erg-invoice.pdf");
+            Files.write(pdfPath, pdfData);
+            logger.info("Rechnungs-PDF erfolgreich gespeichert in: {}", pdfPath.toString());
+
+            // Anhang erstellen (benötigt Patient)
+            // Für DocumentReference wird oft eine ID des Anhangs benötigt, hier setzen wir einen Dummy,
+            // da wir den Anhang hier direkt erstellen und nicht als separate Referenz haben.
+            DocumentReference anhang = createTestAnhang(patient);
+            // Speichere den Anhang zuerst, um eine ID zu haben, falls sie benötigt wird (obwohl createValidErgDocumentReference es intern nicht direkt verwendet)
+            // anhang.setId(IdType.newRandomUuid()); // Gib dem Anhang eine ID, falls nötig
+            saveResourceToJson(ctx, anhang, outputPath.resolve("erg-anhang.json"));
+
+
+            // DocumentReference erstellen (benötigt Patient, Practitioner, Institution, Invoice)
+            // Der Parameter anhangDocRefId in createValidErgDocumentReference ist auskommentiert,
+            // daher übergeben wir hier einen Dummy-String oder null, falls die Methode es verlangt.
+            // In der aktuellen Implementierung wird anhangDocRefId nicht verwendet.
+            DocumentReference docRef = createValidErgDocumentReference(patient, practitioner, institution, invoice, anhang.getIdElement().getIdPart());
+            saveResourceToJson(ctx, docRef, outputPath.resolve("erg-documentreference.json"));
+
+
+            logger.info("Alle Testressourcen wurden erfolgreich als JSON in '{}' gespeichert.", outputDirPath);
+
+        } catch (IOException e) {
+            logger.error("Fehler beim Generieren und Speichern der Testressourcen als JSON: {}", e.getMessage(), e);
+            throw new RuntimeException("Konnte Testressourcen nicht als JSON speichern", e);
+        }
+    }
+
+    /**
+     * Hilfsmethode zum Speichern einer FHIR-Ressource als JSON-Datei.
+     * @param ctx Der FhirContext.
+     * @param resource Die zu speichernde Ressource.
+     * @param filePath Der Pfad zur Ausgabedatei.
+     * @throws IOException Bei Fehlern während des Schreibvorgangs.
+     */
+    private static void saveResourceToJson(FhirContext ctx, Resource resource, Path filePath) throws IOException {
+        // Stelle sicher, dass die Ressource eine ID hat, bevor sie serialisiert wird, wenn sie noch keine hat.
+        // Dies ist nützlich, wenn Referenzen auf diese Ressource in anderen Ressourcen erstellt werden.
+        if (resource.getIdElement().isEmpty()) {
+            // Setze eine zufällige UUID als ID, wenn noch keine vorhanden ist.
+            // Alternativ könnte man spezifische IDs vergeben, falls erforderlich.
+            // resource.setId(IdType.newRandomUuid());
+            // Vorerst lassen wir die IDs so, wie sie von den create-Methoden gesetzt werden (oder auch nicht).
+        }
+
+        String jsonResource = ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(resource);
+        try (FileWriter writer = new FileWriter(filePath.toFile())) {
+            writer.write(jsonResource);
+        }
+        logger.debug("Ressource '{}' erfolgreich gespeichert in: {}", resource.getResourceType().name(), filePath.toString());
+    }
+
+
+    // Optional: Eine main-Methode zum direkten Ausführen der Generierung (nur für Testzwecke)
+    public static void main(String[] args) {
+        System.out.println("Starte Generierung der Testressourcen als JSON...");
+        generateAndSaveAllTestResourcesAsJson();
+        System.out.println("Generierung abgeschlossen. Überprüfe den Ordner src/test/resources/generated-test-resources.");
     }
 } 

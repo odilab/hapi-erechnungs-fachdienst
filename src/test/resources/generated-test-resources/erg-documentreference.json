@@ -1,0 +1,118 @@
+{
+  "resourceType": "DocumentReference",
+  "meta": {
+    "extension": [ {
+      "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung",
+      "extension": [ {
+        "url": "markierung",
+        "valueCoding": {
+          "system": "https://gematik.de/fhir/erg/CodeSystem/erg-dokument-artderarchivierung-cs",
+          "code": "persoenlich",
+          "display": "Persönliche Ablage"
+        }
+      } ]
+    } ],
+    "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-dokumentenmetadaten|1.1.0-RC1" ]
+  },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">ERG Dokumentenmetadaten</div>"
+  },
+  "extension": [ {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-signature",
+    "valueSignature": {
+      "type": [ {
+        "system": "urn:iso-astm:E1762-95:2013",
+        "code": "1.2.840.10065.1.12.1.1"
+      } ],
+      "when": "2025-05-14T10:27:35.209+02:00",
+      "who": {
+        "identifier": {
+          "type": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+              "code": "PRN"
+            } ]
+          },
+          "system": "https://gematik.de/fhir/sid/telematik-id",
+          "value": "MISSING-TELEMATIK-ID-1747211255141"
+        },
+        "display": "Unbekannter Autor"
+      }
+    }
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-rechnungsdatum",
+    "valueDateTime": "2025-05-14T10:27:34+02:00"
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-zahlungszieldatum",
+    "valueDateTime": "2025-05-28T10:27:34+02:00"
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-gesamtbetrag",
+    "valueMoney": {
+      "value": 10.72,
+      "currency": "EUR"
+    }
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-fachrichtung",
+    "valueCoding": {
+      "system": "http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen",
+      "code": "ALLG"
+    }
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-leistungsart",
+    "valueCoding": {
+      "system": "http://beispiel.de/fhir/CodeSystem/leistungsarten",
+      "code": "Privatabrechnung",
+      "display": "Privatabrechnung"
+    }
+  } ],
+  "identifier": [ {
+    "system": "urn:oid:1.2.276.0.76.4.10",
+    "value": "DOC-20250514102735141"
+  } ],
+  "status": "current",
+  "type": {
+    "coding": [ {
+      "system": "http://dvmd.de/fhir/CodeSystem/kdl",
+      "code": "AM010106",
+      "display": "Rechnung ambulante/stationäre Behandlung"
+    } ]
+  },
+  "subject": {
+    "reference": "Patient/null",
+    "display": "Juna"
+  },
+  "author": [ {
+    "identifier": {
+      "type": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+          "code": "PRN"
+        } ]
+      },
+      "system": "https://gematik.de/fhir/sid/telematik-id",
+      "value": "MISSING-TELEMATIK-ID-1747211255141"
+    },
+    "display": "Unbekannter Autor"
+  } ],
+  "description": "E-Rechnung für Juna vom 14.05.2025",
+  "content": [ {
+    "attachment": {
+      "contentType": "application/pdf",
+      "data": "JVBERi0xLjQKJfbk/N8KMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovVmVyc2lvbiAvMS40Ci9QYWdlcyAyIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0tpZHMgWzMgMCBSXQovQ291bnQgMQo+PgplbmRvYmoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovTWVkaWFCb3ggWzAuMCAwLjAgNjEyLjAgNzkyLjBdCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDQgMCBSCi9SZXNvdXJjZXMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0xlbmd0aCAyNjQKL0ZpbHRlciAvRmxhdGVEZWNvZGUKPj4Kc3RyZWFtDQp4nH2RXUvDMBSG7/srzqWC7ZIsH2yI4LAT3Jijyy70LtPYRtsIaXLjr7ddNrRIvTzwPu9zOGeyxIAJyLdkIROGQNBueE0uCv1S2WDLS5DvSS6TyZIARr9yeJhrbWga7eaQF/dpkRJEGGKYYkTElJ5LIspnEb1TPjRzwDRDLOuBHxceuDiPwFqb1vcu7Q7O2LLTja3HqTgiK6fsh7aVCi3sfAYrUxtlZb6T6eNm/TRqxBHfKm+09eMaFDd7CFaNdTFxzFxTwpmgguSUC86mtzcjnYxF90Z7/3nQ3qmyOxK66mryfTE8JTt9a+HCf+E/itPznlVV9/f8MrruHwFSlRpsLz6j33ImiMcNCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PAovRm9udCA2IDAgUgo+PgplbmRvYmoKNiAwIG9iago8PAovRjEgNyAwIFIKL0YyIDggMCBSCj4+CmVuZG9iago3IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYS1Cb2xkCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCj4+CmVuZG9iago4IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQovRW5jb2RpbmcgL1dpbkFuc2lFbmNvZGluZwo+PgplbmRvYmoKeHJlZgowIDkKMDAwMDAwMDAwMCA2NTUzNSBmDQowMDAwMDAwMDE1IDAwMDAwIG4NCjAwMDAwMDAwNzggMDAwMDAgbg0KMDAwMDAwMDEzNSAwMDAwMCBuDQowMDAwMDAwMjQ3IDAwMDAwIG4NCjAwMDAwMDA1ODUgMDAwMDAgbg0KMDAwMDAwMDYxOCAwMDAwMCBuDQowMDAwMDAwNjU5IDAwMDAwIG4NCjAwMDAwMDA3NjEgMDAwMDAgbg0KdHJhaWxlcgo8PAovUm9vdCAxIDAgUgovSUQgWzwzMTg5QzNERTJFODkyNTJBOTY4NDU4ODg2QjVDQ0RBMz4gPDMxODlDM0RFMkU4OTI1MkE5Njg0NTg4ODZCNUNDREEzPl0KL1NpemUgOQo+PgpzdGFydHhyZWYKODU4CiUlRU9GCg=="
+    },
+    "format": {
+      "system": "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs",
+      "code": "erechnung"
+    }
+  }, {
+    "attachment": {
+      "contentType": "application/fhir+json",
+      "data": "ZXdvZ0lDSnlaWE52ZFhKalpWUjVjR1VpT2lBaVNXNTJiMmxqWlNJc0NpQWdJbTFsZEdFaU9pQjdDaUFnSUNBaWNISnZabWxzWlNJNklGc2dJbWgwZEhCek9pOHZaMlZ0WVhScGF5NWtaUzltYUdseUwyVnlaeTlUZEhKMVkzUjFjbVZFWldacGJtbDBhVzl1TDJWeVp5MXlaV05vYm5WdVozd3hMakV1TUMxU1F6RWlJRjBLSUNCOUxBb2dJQ0owWlhoMElqb2dld29nSUNBZ0luTjBZWFIxY3lJNklDSm5aVzVsY21GMFpXUWlMQW9nSUNBZ0ltUnBkaUk2SUNJOFpHbDJJSGh0Ykc1elBWd2lhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNVGs1T1M5NGFIUnRiRndpUGtWU1J5QlFjbWwyWVhSeVpXTm9iblZ1Wnp3dlpHbDJQaUlLSUNCOUxBb2dJQ0psZUhSbGJuTnBiMjRpT2lCYklIc0tJQ0FnSUNKMWNtd2lPaUFpYUhSMGNITTZMeTluWlcxaGRHbHJMbVJsTDJab2FYSXZaWEpuTDFOMGNuVmpkSFZ5WlVSbFptbHVhWFJwYjI0dlpYSm5MV0psYUdGdVpHeDFibWR6WVhKMElpd0tJQ0FnSUNKMllXeDFaVU52WkdsdVp5STZJSHNLSUNBZ0lDQWdJbk41YzNSbGJTSTZJQ0pvZEhSd09pOHZkR1Z5YldsdWIyeHZaM2t1YUd3M0xtOXlaeTlEYjJSbFUzbHpkR1Z0TDNZekxVRmpkRU52WkdVaUxBb2dJQ0FnSUNBaVkyOWtaU0k2SUNKQlRVSWlDaUFnSUNCOUNpQWdmU3dnZXdvZ0lDQWdJblZ5YkNJNklDSm9kSFJ3Y3pvdkwyZGxiV0YwYVdzdVpHVXZabWhwY2k5bGNtY3ZVM1J5ZFdOMGRYSmxSR1ZtYVc1cGRHbHZiaTlsY21jdFptRmphSEpwWTJoMGRXNW5JaXdLSUNBZ0lDSjJZV3gxWlVOdlpHbHVaeUk2SUhzS0lDQWdJQ0FnSW5ONWMzUmxiU0k2SUNKb2RIUndPaTh2YVdobExXUXVaR1V2UTI5a1pWTjVjM1JsYlhNdlFXVnllblJzYVdOb1pVWmhZMmh5YVdOb2RIVnVaMlZ1SWl3S0lDQWdJQ0FnSW1OdlpHVWlPaUFpUVV4TVJ5SUtJQ0FnSUgwS0lDQjlJRjBzQ2lBZ0ltbGtaVzUwYVdacFpYSWlPaUJiSUhzS0lDQWdJQ0owZVhCbElqb2dld29nSUNBZ0lDQWlZMjlrYVc1bklqb2dXeUI3Q2lBZ0lDQWdJQ0FnSW5ONWMzUmxiU0k2SUNKb2RIUndjem92TDJkbGJXRjBhV3N1WkdVdlptaHBjaTlsY21jdlEyOWtaVk41YzNSbGJTOWxjbWN0Y21WamFHNTFibWN0YVdSbGJuUnBabWxsY2kxMGVYQmxMV056SWl3S0lDQWdJQ0FnSUNBaVkyOWtaU0k2SUNKcGJuWnZhV05sSWdvZ0lDQWdJQ0I5SUYwS0lDQWdJSDBzQ2lBZ0lDQWljM2x6ZEdWdElqb2dJblZ5YmpwdmFXUTZNUzR5TGpJM05pNHdMamMyTGpRdU1UQWlMQW9nSUNBZ0luWmhiSFZsSWpvZ0lrVlNSeTFTTFRJd01qVXdOVEUwTVRBeU56TTBJZ29nSUgwZ1hTd0tJQ0FpYzNSaGRIVnpJam9nSW1semMzVmxaQ0lzQ2lBZ0luUjVjR1VpT2lCN0NpQWdJQ0FpWTI5a2FXNW5Jam9nV3lCN0NpQWdJQ0FnSUNKemVYTjBaVzBpT2lBaWFIUjBjSE02THk5blpXMWhkR2xyTG1SbEwyWm9hWEl2WlhKbkwwTnZaR1ZUZVhOMFpXMHZaWEpuTFhKbFkyaHVkVzVuYzJGeWRDMWpjeUlzQ2lBZ0lDQWdJQ0pqYjJSbElqb2dJa0ZDVTBOSVRGVlRVeUlLSUNBZ0lIMGdYUW9nSUgwc0NpQWdJbk4xWW1wbFkzUWlPaUI3Q2lBZ0lDQWljbVZtWlhKbGJtTmxJam9nSWxCaGRHbGxiblF2Ym5Wc2JDSXNDaUFnSUNBaVpHbHpjR3hoZVNJNklDSktkVzVoSWdvZ0lIMHNDaUFnSW5KbFkybHdhV1Z1ZENJNklIc0tJQ0FnSUNKeVpXWmxjbVZ1WTJVaU9pQWlVR0YwYVdWdWRDOXVkV3hzSWl3S0lDQWdJQ0pwWkdWdWRHbG1hV1Z5SWpvZ2V3b2dJQ0FnSUNBaWMzbHpkR1Z0SWpvZ0ltaDBkSEE2THk5bWFHbHlMbVJsTDNOcFpDOW5hM1l2YTNacFpDMHhNQ0lzQ2lBZ0lDQWdJQ0oyWVd4MVpTSTZJQ0pZTVRFME5ESTROVE13SWdvZ0lDQWdmU3dLSUNBZ0lDSmthWE53YkdGNUlqb2dJa3AxYm1FaUNpQWdmU3dLSUNBaVpHRjBaU0k2SUNJeU1ESTFMVEExTFRFMFZERXdPakkzT2pNMEt6QXlPakF3SWl3S0lDQWljR0Z5ZEdsamFYQmhiblFpT2lCYklIc0tJQ0FnSUNKeWIyeGxJam9nZXdvZ0lDQWdJQ0FpWTI5a2FXNW5Jam9nV3lCN0NpQWdJQ0FnSUNBZ0luTjVjM1JsYlNJNklDSm9kSFJ3Y3pvdkwyZGxiV0YwYVdzdVpHVXZabWhwY2k5bGNtY3ZRMjlrWlZONWMzUmxiUzlsY21jdGNHRnlkR2xqYVhCaGJuUXRjbTlzWlMxRFV5SXNDaUFnSUNBZ0lDQWdJbU52WkdVaU9pQWliR1ZwYzNSMWJtZHpaWEppY21sdVoyVnlJZ29nSUNBZ0lDQjlJRjBLSUNBZ0lIMHNDaUFnSUNBaVlXTjBiM0lpT2lCN0NpQWdJQ0FnSUNKeVpXWmxjbVZ1WTJVaU9pQWlVSEpoWTNScGRHbHZibVZ5TDI1MWJHd2lMQW9nSUNBZ0lDQWlhV1JsYm5ScFptbGxjaUk2SUhzS0lDQWdJQ0FnSUNBaWRIbHdaU0k2SUhzS0lDQWdJQ0FnSUNBZ0lDSmpiMlJwYm1jaU9pQmJJSHNLSUNBZ0lDQWdJQ0FnSUNBZ0luTjVjM1JsYlNJNklDSm9kSFJ3T2k4dmRHVnliV2x1YjJ4dloza3VhR3czTG05eVp5OURiMlJsVTNsemRHVnRMM1l5TFRBeU1ETWlMQW9nSUNBZ0lDQWdJQ0FnSUNBaVkyOWtaU0k2SUNKUVVrNGlDaUFnSUNBZ0lDQWdJQ0I5SUYwS0lDQWdJQ0FnSUNCOUxBb2dJQ0FnSUNBZ0lDSnplWE4wWlcwaU9pQWlhSFIwY0hNNkx5OW5aVzFoZEdsckxtUmxMMlpvYVhJdmMybGtMM1JsYkdWdFlYUnBheTFwWkNJc0NpQWdJQ0FnSUNBZ0luWmhiSFZsSWpvZ0lqRXRTRUpCTFZSbGMzUnJZWEowWlMwNE9ETXhNVEF3TURBeE1qa3dPRE1pQ2lBZ0lDQWdJSDBLSUNBZ0lIMEtJQ0I5SUYwc0NpQWdJbWx6YzNWbGNpSTZJSHNLSUNBZ0lDSnlaV1psY21WdVkyVWlPaUFpVDNKbllXNXBlbUYwYVc5dUwyNTFiR3dpTEFvZ0lDQWdJbWxrWlc1MGFXWnBaWElpT2lCN0NpQWdJQ0FnSUNKMGVYQmxJam9nZXdvZ0lDQWdJQ0FnSUNKamIyUnBibWNpT2lCYklIc0tJQ0FnSUNBZ0lDQWdJQ0p6ZVhOMFpXMGlPaUFpYUhSMGNEb3ZMM1JsY20xcGJtOXNiMmQ1TG1oc055NXZjbWN2UTI5a1pWTjVjM1JsYlM5Mk1pMHdNakF6SWl3S0lDQWdJQ0FnSUNBZ0lDSmpiMlJsSWpvZ0lsQlNUaUlLSUNBZ0lDQWdJQ0I5SUYwS0lDQWdJQ0FnZlN3S0lDQWdJQ0FnSW5ONWMzUmxiU0k2SUNKb2RIUndjem92TDJkbGJXRjBhV3N1WkdVdlptaHBjaTl6YVdRdmRHVnNaVzFoZEdsckxXbGtJaXdLSUNBZ0lDQWdJblpoYkhWbElqb2dJalV0VTAxRExVSXRWR1Z6ZEd0aGNuUmxMVGc0TXpFeE1EQXdNREV5T1RBM01pSUtJQ0FnSUgwc0NpQWdJQ0FpWkdsemNHeGhlU0k2SUNKTGNtRnVhMlZ1YUdGMWN5QlRkQzRnUzJsc2FXRnVWRVZUVkMxUFRreFpJZ29nSUgwc0NpQWdJbXhwYm1WSmRHVnRJam9nV3lCN0NpQWdJQ0FpYzJWeGRXVnVZMlVpT2lBeExBb2dJQ0FnSW1Ob1lYSm5aVWwwWlcxU1pXWmxjbVZ1WTJVaU9pQjdDaUFnSUNBZ0lDSnlaV1psY21WdVkyVWlPaUFpUTJoaGNtZGxTWFJsYlM5dWRXeHNJZ29nSUNBZ2ZTd0tJQ0FnSUNKd2NtbGpaVU52YlhCdmJtVnVkQ0k2SUZzZ2V3b2dJQ0FnSUNBaWRIbHdaU0k2SUNKaVlYTmxJaXdLSUNBZ0lDQWdJbUZ0YjNWdWRDSTZJSHNLSUNBZ0lDQWdJQ0FpZG1Gc2RXVWlPaUF4TUM0M01pd0tJQ0FnSUNBZ0lDQWlZM1Z5Y21WdVkza2lPaUFpUlZWU0lnb2dJQ0FnSUNCOUNpQWdJQ0I5SUYwS0lDQjlJRjBzQ2lBZ0luUnZkR0ZzVUhKcFkyVkRiMjF3YjI1bGJuUWlPaUJiSUhzS0lDQWdJQ0owZVhCbElqb2dJbUpoYzJVaUxBb2dJQ0FnSW1OdlpHVWlPaUI3Q2lBZ0lDQWdJQ0pqYjJScGJtY2lPaUJiSUhzS0lDQWdJQ0FnSUNBaWMzbHpkR1Z0SWpvZ0ltaDBkSEJ6T2k4dloyVnRZWFJwYXk1a1pTOW1hR2x5TDJWeVp5OURiMlJsVTNsemRHVnRMMlZ5WnkxMGIzUmhiQzF3Y21salpTMWpiMjF3YjI1bGJuUXRkSGx3WlMxamN5SXNDaUFnSUNBZ0lDQWdJbU52WkdVaU9pQWlVM1Z0YldWU1pXTm9iblZ1WjNOd2IzTnBkR2x2Ym1WdUlnb2dJQ0FnSUNCOUlGMEtJQ0FnSUgwc0NpQWdJQ0FpWVcxdmRXNTBJam9nZXdvZ0lDQWdJQ0FpZG1Gc2RXVWlPaUF4TUM0M01pd0tJQ0FnSUNBZ0ltTjFjbkpsYm1ONUlqb2dJa1ZWVWlJS0lDQWdJSDBLSUNCOUlGMHNDaUFnSW5SdmRHRnNUbVYwSWpvZ2V3b2dJQ0FnSW5aaGJIVmxJam9nTVRBdU56SXNDaUFnSUNBaVkzVnljbVZ1WTNraU9pQWlSVlZTSWdvZ0lIMHNDaUFnSW5SdmRHRnNSM0p2YzNNaU9pQjdDaUFnSUNBaWRtRnNkV1VpT2lBeE1DNDNNaXdLSUNBZ0lDSmpkWEp5Wlc1amVTSTZJQ0pGVlZJaUNpQWdmU3dLSUNBaWNHRjViV1Z1ZEZSbGNtMXpJam9nSWxwaGFHeDFibWR6ZW1sbGJEb2dNVFFnVkdGblpTQnVaWFIwYnlJc0NpQWdJbDl3WVhsdFpXNTBWR1Z5YlhNaU9pQjdDaUFnSUNBaVpYaDBaVzV6YVc5dUlqb2dXeUI3Q2lBZ0lDQWdJQ0oxY213aU9pQWlhSFIwY0hNNkx5OW5aVzFoZEdsckxtUmxMMlpvYVhJdlpYSm5MMU4wY25WamRIVnlaVVJsWm1sdWFYUnBiMjR2WlhKbkxYcGhhR3gxYm1kemVtbGxiQ0lzQ2lBZ0lDQWdJQ0oyWVd4MVpVUmhkR1VpT2lBaU1qQXlOUzB3TlMweU9DSUtJQ0FnSUgwZ1hRb2dJSDBzQ2lBZ0ltNXZkR1VpT2lCYklIc0tJQ0FnSUNKMFpYaDBJam9nSWtocGJuZGxhWE1nWnNPOGNpQmtaVzRnUzI5emRHVnVkSExEcEdkbGNpNGlDaUFnZlNCZENuMD0="
+    },
+    "format": {
+      "system": "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs",
+      "code": "rechnungsinhalt"
+    }
+  } ]
+}

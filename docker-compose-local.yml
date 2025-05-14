@@ -1,0 +1,23 @@
+services:
+  idp-server:
+    hostname: idp-server
+    container_name: idp-server2
+    image: ghcr.io/odilab/ipd-server/idp-server:latest
+    entrypoint: ["java","-Dspring.profiles.active=ssl","-jar","/app/idp-server-19.1.0.jar"]
+    ports:
+      - "10000:10000"
+    networks:
+      - e_rezept_services_default
+  erp-service:
+    hostname: erp-service
+    container_name: erp-service
+    image: ghcr.io/odilab/spring-erp-services/erp-service:latest
+    entrypoint: ["java","-Dspring.profiles.active=ssl","-jar","/app/app.jar"]
+    environment:
+      - default.string.idp.urlHttps=https://idp-server:10000
+    ports:
+      - "3001:3001"
+    networks:
+      - e_rezept_services_default
+networks:
+  e_rezept_services_default:

@@ -1,0 +1,56 @@
+{
+  "resourceType": "Practitioner",
+  "meta": {
+    "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-person|1.1.0-RC1" ]
+  },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Practitioner Details</div>"
+  },
+  "identifier": [ {
+    "type": {
+      "coding": [ {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+        "code": "PRN"
+      } ]
+    },
+    "system": "https://gematik.de/fhir/sid/telematik-id",
+    "value": "1-HBA-Testkarte-883110000129083"
+  } ],
+  "name": [ {
+    "use": "official",
+    "family": "MaiÞer",
+    "_family": {
+      "extension": [ {
+        "url": "http://fhir.de/StructureDefinition/humanname-namenszusatz",
+        "valueString": "von"
+      }, {
+        "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-prefix",
+        "valueString": "Prof"
+      } ]
+    },
+    "given": [ "Roland" ],
+    "prefix": [ "Dr. med." ]
+  } ],
+  "telecom": [ {
+    "system": "phone",
+    "value": "+49301234567",
+    "use": "work"
+  } ],
+  "address": [ {
+    "type": "both",
+    "line": [ "Hauptstraße 10 Hinterhaus" ],
+    "city": "Berlin",
+    "postalCode": "10115",
+    "country": "DE"
+  } ],
+  "qualification": [ {
+    "code": {
+      "coding": [ {
+        "system": "http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen",
+        "code": "ALLG",
+        "display": "Allgemeinmedizin"
+      } ]
+    }
+  } ]
+}

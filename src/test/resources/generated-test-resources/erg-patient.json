@@ -1,0 +1,77 @@
+{
+  "resourceType": "Patient",
+  "meta": {
+    "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-patient|1.1.0-RC1" ]
+  },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Patientendaten</div>"
+  },
+  "identifier": [ {
+    "type": {
+      "coding": [ {
+        "system": "http://fhir.de/CodeSystem/identifier-type-de-basis",
+        "code": "KVZ10"
+      } ]
+    },
+    "system": "http://fhir.de/sid/gkv/kvid-10",
+    "value": "X114428530",
+    "assigner": {
+      "identifier": {
+        "type": {
+          "coding": [ {
+            "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+            "code": "XX"
+          } ]
+        },
+        "system": "http://fhir.de/sid/arge-ik/iknr",
+        "value": "109519018"
+      }
+    }
+  } ],
+  "name": [ {
+    "use": "official",
+    "text": "Juna",
+    "family": "Fuchs",
+    "_family": {
+      "extension": [ {
+        "url": "http://fhir.de/StructureDefinition/humanname-namenszusatz",
+        "valueString": "geb. Beispiel"
+      }, {
+        "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name",
+        "valueString": "Fuchs"
+      }, {
+        "url": "http://fhir.de/StructureDefinition/humanname-vorsatzwort",
+        "valueString": "von"
+      } ]
+    },
+    "given": [ "Juna" ],
+    "prefix": [ "Dr." ],
+    "_prefix": [ {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/StructureDefinition/iso21090-EN-qualifier",
+        "valueCode": "AC"
+      } ]
+    } ]
+  } ],
+  "birthDate": "1970-01-01",
+  "address": [ {
+    "type": "both",
+    "line": [ "Musterstraße 1a Adresszusatz" ],
+    "_line": [ {
+      "extension": [ {
+        "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName",
+        "valueString": "Musterstraße"
+      }, {
+        "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber",
+        "valueString": "1a"
+      }, {
+        "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-additionalLocator",
+        "valueString": "Adresszusatz"
+      } ]
+    } ],
+    "city": "Musterstadt",
+    "postalCode": "12345",
+    "country": "DE"
+  } ]
+}

@@ -1,0 +1,21 @@
+{
+  "resourceType": "DocumentReference",
+  "status": "current",
+  "type": {
+    "coding": [ {
+      "system": "http://dvmd.de/fhir/CodeSystem/kdl",
+      "code": "PT130102",
+      "display": "Molekularpathologiebefund"
+    } ]
+  },
+  "subject": {
+    "display": "Unbekannter Patient"
+  },
+  "description": "Molekularpathologiebefund vom 31.12.21",
+  "content": [ {
+    "attachment": {
+      "contentType": "application/pdf",
+      "data": "UkVsRlUwbFRWRTVWVWtWSlRrSkZTVk5RU1VWTVJFbEZVMGxUVkV0RlNVNVdRVXhKUkVWVFVFUkdNREE9"
+    }
+  } ]
+}
