@@ -1,0 +1,149 @@
+{
+  "resourceType": "Parameters",
+  "parameter": [ {
+    "name": "rechnung",
+    "resource": {
+      "resourceType": "DocumentReference",
+      "meta": {
+        "extension": [ {
+          "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-markierung",
+          "extension": [ {
+            "url": "markierung",
+            "valueCoding": {
+              "system": "https://gematik.de/fhir/erg/CodeSystem/erg-dokument-artderarchivierung-cs",
+              "code": "persoenlich",
+              "display": "Persönliche Ablage"
+            }
+          } ]
+        } ],
+        "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-dokumentenmetadaten|1.1.0-RC1" ]
+      },
+      "text": {
+        "status": "generated",
+        "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">ERG Dokumentenmetadaten</div>"
+      },
+      "extension": [ {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-signature",
+        "valueSignature": {
+          "type": [ {
+            "system": "urn:iso-astm:E1762-95:2013",
+            "code": "1.2.840.10065.1.12.1.1"
+          } ],
+          "when": "2025-05-15T09:26:52.038+02:00",
+          "who": {
+            "reference": "Practitioner/99107c5e-cf3d-4314-99a0-118d14e855fb",
+            "identifier": {
+              "type": {
+                "coding": [ {
+                  "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                  "code": "PRN"
+                } ]
+              },
+              "system": "https://gematik.de/fhir/sid/telematik-id",
+              "value": "1-HBA-DUMMY-11406"
+            },
+            "display": "Practitioner mit ID 99107c5e-cf3d-4314-99a0-118d14e855fb"
+          }
+        }
+      }, {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-rechnungsdatum",
+        "valueDateTime": "2025-05-15T09:26:51+02:00"
+      }, {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-zahlungszieldatum",
+        "valueDateTime": "2025-05-29T09:26:51+02:00"
+      }, {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-documentreference-gesamtbetrag",
+        "valueMoney": {
+          "value": 10.72,
+          "currency": "EUR"
+        }
+      }, {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-fachrichtung",
+        "valueCoding": {
+          "system": "http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen",
+          "code": "ALLG"
+        }
+      }, {
+        "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-docref-leistungsart",
+        "valueCoding": {
+          "system": "http://beispiel.de/fhir/CodeSystem/leistungsarten",
+          "code": "Privatabrechnung",
+          "display": "Privatabrechnung"
+        }
+      } ],
+      "identifier": [ {
+        "system": "urn:oid:1.2.276.0.76.4.10",
+        "value": "DOC-20250515092651444"
+      } ],
+      "status": "current",
+      "type": {
+        "coding": [ {
+          "system": "http://dvmd.de/fhir/CodeSystem/kdl",
+          "code": "AM010106",
+          "display": "Rechnung ambulante/stationäre Behandlung"
+        } ]
+      },
+      "subject": {
+        "reference": "Patient/3b220526-575b-4bbb-b81f-d0520abb4ef9",
+        "display": "Patient mit ID 3b220526-575b-4bbb-b81f-d0520abb4ef9"
+      },
+      "author": [ {
+        "reference": "Practitioner/99107c5e-cf3d-4314-99a0-118d14e855fb",
+        "identifier": {
+          "type": {
+            "coding": [ {
+              "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+              "code": "PRN"
+            } ]
+          },
+          "system": "https://gematik.de/fhir/sid/telematik-id",
+          "value": "1-HBA-DUMMY-11406"
+        },
+        "display": "Practitioner mit ID 99107c5e-cf3d-4314-99a0-118d14e855fb"
+      } ],
+      "description": "E-Rechnung für Patient mit ID 3b220526-575b-4bbb-b81f-d0520abb4ef9 vom 15.05.2025",
+      "content": [ {
+        "attachment": {
+          "contentType": "application/pdf",
+          "data": "JVBERi0xLjQKJfbk/N8KMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovVmVyc2lvbiAvMS40Ci9QYWdlcyAyIDAgUgo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0tpZHMgWzMgMCBSXQovQ291bnQgMQo+PgplbmRvYmoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovTWVkaWFCb3ggWzAuMCAwLjAgNjEyLjAgNzkyLjBdCi9QYXJlbnQgMiAwIFIKL0NvbnRlbnRzIDQgMCBSCi9SZXNvdXJjZXMgNSAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDwKL0xlbmd0aCAzMDUKL0ZpbHRlciAvRmxhdGVEZWNvZGUKPj4Kc3RyZWFtDQp4nH2SUWuDMBSF3/0VedxgaZOYm2gZg5XaMRjbEPeyt0SjddQUNL7s1y/WyirDPSacc77DvXe9p4gylJXBNguAIMn9owhuUpMfbG+rW5R9BUkWrPcMUXKlo3NdZ/umMe0GJekTTjEjDAhQIDETQKeQ0Sri0bpTrm82iMKKwGow/LLojCXEaHgxdecGlml1W9vK45bqCS7Plre2UrbulKtPFjW1Q887lEMUFrnQuDQFYF7EBY6UVjiMuCB5bqSQZLEKHXPffaKxbplP2LVuQoeaMQJMYJCgMddaYx3REhf+kyituSnjJTTIc+Q99xOVXLKECykgfHxYqAAwVn01zp20ca2q/LDJnY9JPtL5SuCy9W3b/yf+g7gcwac6HIe9fNfm6G0cZaoyyA7gyfoDSzOcWg0KZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8Ci9Gb250IDYgMCBSCj4+CmVuZG9iago2IDAgb2JqCjw8Ci9GMSA3IDAgUgovRjIgOCAwIFIKPj4KZW5kb2JqCjcgMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhLUJvbGQKL0VuY29kaW5nIC9XaW5BbnNpRW5jb2RpbmcKPj4KZW5kb2JqCjggMCBvYmoKPDwKL1R5cGUgL0ZvbnQKL1N1YnR5cGUgL1R5cGUxCi9CYXNlRm9udCAvSGVsdmV0aWNhCi9FbmNvZGluZyAvV2luQW5zaUVuY29kaW5nCj4+CmVuZG9iagp4cmVmCjAgOQowMDAwMDAwMDAwIDY1NTM1IGYNCjAwMDAwMDAwMTUgMDAwMDAgbg0KMDAwMDAwMDA3OCAwMDAwMCBuDQowMDAwMDAwMTM1IDAwMDAwIG4NCjAwMDAwMDAyNDcgMDAwMDAgbg0KMDAwMDAwMDYyNiAwMDAwMCBuDQowMDAwMDAwNjU5IDAwMDAwIG4NCjAwMDAwMDA3MDAgMDAwMDAgbg0KMDAwMDAwMDgwMiAwMDAwMCBuDQp0cmFpbGVyCjw8Ci9Sb290IDEgMCBSCi9JRCBbPEIwQTJDNUEwRkMwQzg0RkY3MDI5Q0E1OTJEMEI2RjcxPiA8QjBBMkM1QTBGQzBDODRGRjcwMjlDQTU5MkQwQjZGNzE+XQovU2l6ZSA5Cj4+CnN0YXJ0eHJlZgo4OTkKJSVFT0YK"
+        },
+        "format": {
+          "system": "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs",
+          "code": "erechnung"
+        }
+      }, {
+        "attachment": {
+          "contentType": "application/fhir+json",
+          "data": "ZXdvZ0lDSnlaWE52ZFhKalpWUjVjR1VpT2lBaVNXNTJiMmxqWlNJc0NpQWdJbTFsZEdFaU9pQjdDaUFnSUNBaWNISnZabWxzWlNJNklGc2dJbWgwZEhCek9pOHZaMlZ0WVhScGF5NWtaUzltYUdseUwyVnlaeTlUZEhKMVkzUjFjbVZFWldacGJtbDBhVzl1TDJWeVp5MXlaV05vYm5WdVozd3hMakV1TUMxU1F6RWlJRjBLSUNCOUxBb2dJQ0owWlhoMElqb2dld29nSUNBZ0luTjBZWFIxY3lJNklDSm5aVzVsY21GMFpXUWlMQW9nSUNBZ0ltUnBkaUk2SUNJOFpHbDJJSGh0Ykc1elBWd2lhSFIwY0RvdkwzZDNkeTUzTXk1dmNtY3ZNVGs1T1M5NGFIUnRiRndpUGtWU1J5QlFjbWwyWVhSeVpXTm9iblZ1Wnp3dlpHbDJQaUlLSUNCOUxBb2dJQ0psZUhSbGJuTnBiMjRpT2lCYklIc0tJQ0FnSUNKMWNtd2lPaUFpYUhSMGNITTZMeTluWlcxaGRHbHJMbVJsTDJab2FYSXZaWEpuTDFOMGNuVmpkSFZ5WlVSbFptbHVhWFJwYjI0dlpYSm5MV0psYUdGdVpHeDFibWR6WVhKMElpd0tJQ0FnSUNKMllXeDFaVU52WkdsdVp5STZJSHNLSUNBZ0lDQWdJbk41YzNSbGJTSTZJQ0pvZEhSd09pOHZkR1Z5YldsdWIyeHZaM2t1YUd3M0xtOXlaeTlEYjJSbFUzbHpkR1Z0TDNZekxVRmpkRU52WkdVaUxBb2dJQ0FnSUNBaVkyOWtaU0k2SUNKQlRVSWlDaUFnSUNCOUNpQWdmU3dnZXdvZ0lDQWdJblZ5YkNJNklDSm9kSFJ3Y3pvdkwyZGxiV0YwYVdzdVpHVXZabWhwY2k5bGNtY3ZVM1J5ZFdOMGRYSmxSR1ZtYVc1cGRHbHZiaTlsY21jdFptRmphSEpwWTJoMGRXNW5JaXdLSUNBZ0lDSjJZV3gxWlVOdlpHbHVaeUk2SUhzS0lDQWdJQ0FnSW5ONWMzUmxiU0k2SUNKb2RIUndPaTh2YVdobExXUXVaR1V2UTI5a1pWTjVjM1JsYlhNdlFXVnllblJzYVdOb1pVWmhZMmh5YVdOb2RIVnVaMlZ1SWl3S0lDQWdJQ0FnSW1OdlpHVWlPaUFpUVV4TVJ5SUtJQ0FnSUgwS0lDQjlJRjBzQ2lBZ0ltbGtaVzUwYVdacFpYSWlPaUJiSUhzS0lDQWdJQ0owZVhCbElqb2dld29nSUNBZ0lDQWlZMjlrYVc1bklqb2dXeUI3Q2lBZ0lDQWdJQ0FnSW5ONWMzUmxiU0k2SUNKb2RIUndjem92TDJkbGJXRjBhV3N1WkdVdlptaHBjaTlsY21jdlEyOWtaVk41YzNSbGJTOWxjbWN0Y21WamFHNTFibWN0YVdSbGJuUnBabWxsY2kxMGVYQmxMV056SWl3S0lDQWdJQ0FnSUNBaVkyOWtaU0k2SUNKcGJuWnZhV05sSWdvZ0lDQWdJQ0I5SUYwS0lDQWdJSDBzQ2lBZ0lDQWljM2x6ZEdWdElqb2dJblZ5YmpwdmFXUTZNUzR5TGpJM05pNHdMamMyTGpRdU1UQWlMQW9nSUNBZ0luWmhiSFZsSWpvZ0lrVlNSeTFTTFRJd01qVXdOVEUxTURreU5qVXhJZ29nSUgwZ1hTd0tJQ0FpYzNSaGRIVnpJam9nSW1semMzVmxaQ0lzQ2lBZ0luUjVjR1VpT2lCN0NpQWdJQ0FpWTI5a2FXNW5Jam9nV3lCN0NpQWdJQ0FnSUNKemVYTjBaVzBpT2lBaWFIUjBjSE02THk5blpXMWhkR2xyTG1SbEwyWm9hWEl2WlhKbkwwTnZaR1ZUZVhOMFpXMHZaWEpuTFhKbFkyaHVkVzVuYzJGeWRDMWpjeUlzQ2lBZ0lDQWdJQ0pqYjJSbElqb2dJa0ZDVTBOSVRGVlRVeUlLSUNBZ0lIMGdYUW9nSUgwc0NpQWdJbk4xWW1wbFkzUWlPaUI3Q2lBZ0lDQWljbVZtWlhKbGJtTmxJam9nSWxCaGRHbGxiblF2TTJJeU1qQTFNall0TlRjMVlpMDBZbUppTFdJNE1XWXRaREExTWpCaFltSTBaV1k1SWl3S0lDQWdJQ0prYVhOd2JHRjVJam9nSWxCaGRHbGxiblFnYldsMElFbEVJRE5pTWpJd05USTJMVFUzTldJdE5HSmlZaTFpT0RGbUxXUXdOVEl3WVdKaU5HVm1PU0lLSUNCOUxBb2dJQ0p5WldOcGNHbGxiblFpT2lCN0NpQWdJQ0FpY21WbVpYSmxibU5sSWpvZ0lsQmhkR2xsYm5Rdk0ySXlNakExTWpZdE5UYzFZaTAwWW1KaUxXSTRNV1l0WkRBMU1qQmhZbUkwWldZNUlpd0tJQ0FnSUNKcFpHVnVkR2xtYVdWeUlqb2dld29nSUNBZ0lDQWljM2x6ZEdWdElqb2dJbWgwZEhBNkx5OW1hR2x5TG1SbEwzTnBaQzluYTNZdmEzWnBaQzB4TUNJc0NpQWdJQ0FnSUNKMllXeDFaU0k2SUNKWU1qazBNREV4TkRBMUlnb2dJQ0FnZlN3S0lDQWdJQ0prYVhOd2JHRjVJam9nSWxCaGRHbGxiblFnYldsMElFbEVJRE5pTWpJd05USTJMVFUzTldJdE5HSmlZaTFpT0RGbUxXUXdOVEl3WVdKaU5HVm1PU0lLSUNCOUxBb2dJQ0prWVhSbElqb2dJakl3TWpVdE1EVXRNVFZVTURrNk1qWTZOVEVyTURJNk1EQWlMQW9nSUNKd1lYSjBhV05wY0dGdWRDSTZJRnNnZXdvZ0lDQWdJbkp2YkdVaU9pQjdDaUFnSUNBZ0lDSmpiMlJwYm1jaU9pQmJJSHNLSUNBZ0lDQWdJQ0FpYzNsemRHVnRJam9nSW1oMGRIQnpPaTh2WjJWdFlYUnBheTVrWlM5bWFHbHlMMlZ5Wnk5RGIyUmxVM2x6ZEdWdEwyVnlaeTF3WVhKMGFXTnBjR0Z1ZEMxeWIyeGxMVU5USWl3S0lDQWdJQ0FnSUNBaVkyOWtaU0k2SUNKc1pXbHpkSFZ1WjNObGNtSnlhVzVuWlhJaUNpQWdJQ0FnSUgwZ1hRb2dJQ0FnZlN3S0lDQWdJQ0poWTNSdmNpSTZJSHNLSUNBZ0lDQWdJbkpsWm1WeVpXNWpaU0k2SUNKUWNtRmpkR2wwYVc5dVpYSXZPVGt4TURkak5XVXRZMll6WkMwME16RTBMVGs1WVRBdE1URTRaREUwWlRnMU5XWmlJaXdLSUNBZ0lDQWdJbWxrWlc1MGFXWnBaWElpT2lCN0NpQWdJQ0FnSUNBZ0luUjVjR1VpT2lCN0NpQWdJQ0FnSUNBZ0lDQWlZMjlrYVc1bklqb2dXeUI3Q2lBZ0lDQWdJQ0FnSUNBZ0lDSnplWE4wWlcwaU9pQWlhSFIwY0RvdkwzUmxjbTFwYm05c2IyZDVMbWhzTnk1dmNtY3ZRMjlrWlZONWMzUmxiUzkyTWkwd01qQXpJaXdLSUNBZ0lDQWdJQ0FnSUNBZ0ltTnZaR1VpT2lBaVVGSk9JZ29nSUNBZ0lDQWdJQ0FnZlNCZENpQWdJQ0FnSUNBZ2ZTd0tJQ0FnSUNBZ0lDQWljM2x6ZEdWdElqb2dJbWgwZEhCek9pOHZaMlZ0WVhScGF5NWtaUzltYUdseUwzTnBaQzkwWld4bGJXRjBhV3N0YVdRaUxBb2dJQ0FnSUNBZ0lDSjJZV3gxWlNJNklDSXhMVWhDUVMxRVZVMU5XUzB4TVRRd05pSUtJQ0FnSUNBZ2ZTd0tJQ0FnSUNBZ0ltUnBjM0JzWVhraU9pQWlVSEpoWTNScGRHbHZibVZ5SUcxcGRDQkpSQ0E1T1RFd04yTTFaUzFqWmpOa0xUUXpNVFF0T1RsaE1DMHhNVGhrTVRSbE9EVTFabUlpQ2lBZ0lDQjlDaUFnZlNCZExBb2dJQ0pwYzNOMVpYSWlPaUI3Q2lBZ0lDQWljbVZtWlhKbGJtTmxJam9nSWs5eVoyRnVhWHBoZEdsdmJpOWpOVGd6WkdNMllpMW1aV1ExTFRSa09XUXRPR0ZpWVMwek9EUTJNR05qWlRjMk56QWlMQW9nSUNBZ0ltbGtaVzUwYVdacFpYSWlPaUI3Q2lBZ0lDQWdJQ0owZVhCbElqb2dld29nSUNBZ0lDQWdJQ0pqYjJScGJtY2lPaUJiSUhzS0lDQWdJQ0FnSUNBZ0lDSnplWE4wWlcwaU9pQWlhSFIwY0RvdkwzUmxjbTFwYm05c2IyZDVMbWhzTnk1dmNtY3ZRMjlrWlZONWMzUmxiUzkyTWkwd01qQXpJaXdLSUNBZ0lDQWdJQ0FnSUNKamIyUmxJam9nSWxCU1RpSUtJQ0FnSUNBZ0lDQjlJRjBLSUNBZ0lDQWdmU3dLSUNBZ0lDQWdJbk41YzNSbGJTSTZJQ0pvZEhSd2N6b3ZMMmRsYldGMGFXc3VaR1V2Wm1ocGNpOXphV1F2ZEdWc1pXMWhkR2xyTFdsa0lpd0tJQ0FnSUNBZ0luWmhiSFZsSWpvZ0lqVXRVMDFETFVJdFJGVk5UVmt0TVRFME1EWWlDaUFnSUNCOUxBb2dJQ0FnSW1ScGMzQnNZWGtpT2lBaVQzSm5ZVzVwYzJGMGFXOXVJRzFwZENCSlJDQmpOVGd6WkdNMllpMW1aV1ExTFRSa09XUXRPR0ZpWVMwek9EUTJNR05qWlRjMk56QWlDaUFnZlN3S0lDQWliR2x1WlVsMFpXMGlPaUJiSUhzS0lDQWdJQ0p6WlhGMVpXNWpaU0k2SURFc0NpQWdJQ0FpWTJoaGNtZGxTWFJsYlZKbFptVnlaVzVqWlNJNklIc0tJQ0FnSUNBZ0luSmxabVZ5Wlc1alpTSTZJQ0pEYUdGeVoyVkpkR1Z0TDNWeWJqcDFkV2xrT21JMVpEQTBZMlUwTFdWbFpUa3ROREF5TlMxaFpEa3lMVGsyT1RBMVlqRTNaamt6TVNJS0lDQWdJSDBzQ2lBZ0lDQWljSEpwWTJWRGIyMXdiMjVsYm5RaU9pQmJJSHNLSUNBZ0lDQWdJblI1Y0dVaU9pQWlZbUZ6WlNJc0NpQWdJQ0FnSUNKaGJXOTFiblFpT2lCN0NpQWdJQ0FnSUNBZ0luWmhiSFZsSWpvZ01UQXVOeklzQ2lBZ0lDQWdJQ0FnSW1OMWNuSmxibU41SWpvZ0lrVlZVaUlLSUNBZ0lDQWdmUW9nSUNBZ2ZTQmRDaUFnZlNCZExBb2dJQ0owYjNSaGJGQnlhV05sUTI5dGNHOXVaVzUwSWpvZ1d5QjdDaUFnSUNBaWRIbHdaU0k2SUNKaVlYTmxJaXdLSUNBZ0lDSmpiMlJsSWpvZ2V3b2dJQ0FnSUNBaVkyOWthVzVuSWpvZ1d5QjdDaUFnSUNBZ0lDQWdJbk41YzNSbGJTSTZJQ0pvZEhSd2N6b3ZMMmRsYldGMGFXc3VaR1V2Wm1ocGNpOWxjbWN2UTI5a1pWTjVjM1JsYlM5bGNtY3RkRzkwWVd3dGNISnBZMlV0WTI5dGNHOXVaVzUwTFhSNWNHVXRZM01pTEFvZ0lDQWdJQ0FnSUNKamIyUmxJam9nSWxOMWJXMWxVbVZqYUc1MWJtZHpjRzl6YVhScGIyNWxiaUlLSUNBZ0lDQWdmU0JkQ2lBZ0lDQjlMQW9nSUNBZ0ltRnRiM1Z1ZENJNklIc0tJQ0FnSUNBZ0luWmhiSFZsSWpvZ01UQXVOeklzQ2lBZ0lDQWdJQ0pqZFhKeVpXNWplU0k2SUNKRlZWSWlDaUFnSUNCOUNpQWdmU0JkTEFvZ0lDSjBiM1JoYkU1bGRDSTZJSHNLSUNBZ0lDSjJZV3gxWlNJNklERXdMamN5TEFvZ0lDQWdJbU4xY25KbGJtTjVJam9nSWtWVlVpSUtJQ0I5TEFvZ0lDSjBiM1JoYkVkeWIzTnpJam9nZXdvZ0lDQWdJblpoYkhWbElqb2dNVEF1TnpJc0NpQWdJQ0FpWTNWeWNtVnVZM2tpT2lBaVJWVlNJZ29nSUgwc0NpQWdJbkJoZVcxbGJuUlVaWEp0Y3lJNklDSmFZV2hzZFc1bmMzcHBaV3c2SURFMElGUmhaMlVnYm1WMGRHOGlMQW9nSUNKZmNHRjViV1Z1ZEZSbGNtMXpJam9nZXdvZ0lDQWdJbVY0ZEdWdWMybHZiaUk2SUZzZ2V3b2dJQ0FnSUNBaWRYSnNJam9nSW1oMGRIQnpPaTh2WjJWdFlYUnBheTVrWlM5bWFHbHlMMlZ5Wnk5VGRISjFZM1IxY21WRVpXWnBibWwwYVc5dUwyVnlaeTE2WVdoc2RXNW5jM3BwWld3aUxBb2dJQ0FnSUNBaWRtRnNkV1ZFWVhSbElqb2dJakl3TWpVdE1EVXRNamtpQ2lBZ0lDQjlJRjBLSUNCOUxBb2dJQ0p1YjNSbElqb2dXeUI3Q2lBZ0lDQWlkR1Y0ZENJNklDSklhVzUzWldseklHYkR2SElnWkdWdUlFdHZjM1JsYm5SeXc2Um5aWEl1SWdvZ0lIMGdYUXA5"
+        },
+        "format": {
+          "system": "https://gematik.de/fhir/erg/CodeSystem/erg-attachment-format-cs",
+          "code": "rechnungsinhalt"
+        }
+      } ]
+    }
+  }, {
+    "name": "anhang",
+    "resource": {
+      "resourceType": "DocumentReference",
+      "status": "current",
+      "type": {
+        "coding": [ {
+          "system": "http://dvmd.de/fhir/CodeSystem/kdl",
+          "code": "PT130102",
+          "display": "Molekularpathologiebefund"
+        } ]
+      },
+      "subject": {
+        "reference": "Patient/3b220526-575b-4bbb-b81f-d0520abb4ef9"
+      },
+      "description": "Molekularpathologiebefund vom 31.12.21",
+      "content": [ {
+        "attachment": {
+          "contentType": "application/pdf",
+          "data": "UkVsRlUwbFRWRTVWVWtWSlRrSkZTVk5RU1VWTVJFbEZVMGxUVkV0RlNVNVdRVXhKUkVWVFVFUkdNREE9"
+        }
+      } ]
+    }
+  } ]
+}

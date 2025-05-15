@@ -32,6 +32,17 @@ public class ErgTestResourceUtil {
     private static final Logger logger = LoggerFactory.getLogger(ErgTestResourceUtil.class);
 
     /**
+     * Innere Klasse zur Rückgabe der generierten Ressourcen.
+     */
+    public static class GeneratedReferencingResources {
+        public ChargeItem chargeItem;
+        public Invoice invoice;
+        public DocumentReference invoiceDocumentReference; // Die DR, die die Invoice enthält
+        public DocumentReference attachmentDocumentReference; // Die DR für den separaten Anhang
+        public byte[] invoicePdfData; // PDF der Invoice
+    }
+
+    /**
      * Erstellt einen validen ERG-Patienten gemäß dem ERG-Patient-Profil
      */
     public static Patient createTestErgPatient() {
@@ -849,6 +860,81 @@ public class ErgTestResourceUtil {
     }
 
     /**
+     * Generiert ChargeItem, Invoice, Anhang und DocumentReference für existierende Entitäten (Patient, Practitioner, Organization),
+     * die über ihre IDs referenziert werden.
+     *
+     * @param patientId ID des Patienten (z.B. "Patient/123" oder "123")
+     * @param practitionerId ID des Practitioners (z.B. "Practitioner/456" oder "456")
+     * @param organizationId ID der Organization (z.B. "Organization/789" oder "789")
+     * @return Ein Objekt mit den generierten Ressourcen.
+     */
+    public static GeneratedReferencingResources generateResourcesForExistingEntities(
+            String patientId, String practitionerId, String organizationId) {
+
+        // 1. "Dummy" Ressourcen erstellen, die nur die ID und benötigte Felder haben
+        String pIdOnly = patientId.contains("/") ? patientId.substring(patientId.lastIndexOf('/') + 1) : patientId;
+        Patient patient = new Patient();
+        patient.setId("Patient/" + pIdOnly);
+        patient.addName().setText("Patient mit ID " + pIdOnly);
+        patient.addIdentifier()
+            .setSystem("http://fhir.de/sid/gkv/kvid-10") // Benötigt für Invoice.recipient.identifier
+            .setValue("X" + (System.currentTimeMillis() % 1000000000L)); // Dummy KVNR
+
+        String prIdOnly = practitionerId.contains("/") ? practitionerId.substring(practitionerId.lastIndexOf('/') + 1) : practitionerId;
+        Practitioner practitioner = new Practitioner();
+        practitioner.setId("Practitioner/" + prIdOnly);
+        practitioner.addName().setText("Practitioner mit ID " + prIdOnly);
+        Identifier pTeleId = practitioner.addIdentifier()
+            .setSystem("https://gematik.de/fhir/sid/telematik-id")
+            .setValue("1-HBA-DUMMY-" + (System.currentTimeMillis() % 100000L));
+        pTeleId.setType(new CodeableConcept().addCoding(new Coding("http://terminology.hl7.org/CodeSystem/v2-0203", "PRN", null)));
+
+
+        String oIdOnly = organizationId.contains("/") ? organizationId.substring(organizationId.lastIndexOf('/') + 1) : organizationId;
+        Organization organization = new Organization();
+        organization.setId("Organization/" + oIdOnly);
+        organization.setName("Organisation mit ID " + oIdOnly);
+        Identifier oTeleId = organization.addIdentifier()
+            .setSystem("https://gematik.de/fhir/sid/telematik-id")
+            .setValue("5-SMC-B-DUMMY-" + (System.currentTimeMillis() % 100000L));
+        oTeleId.setType(new CodeableConcept().addCoding(new Coding("http://terminology.hl7.org/CodeSystem/v2-0203", "PRN", null)));
+
+
+        // 2. ChargeItem erstellen
+        ChargeItem chargeItem = createMinimalChargeItem(patient);
+        chargeItem.setId(IdType.newRandomUuid());
+
+        // 3. Invoice erstellen
+        Invoice invoice = createValidErgInvoice(patient, practitioner, organization, chargeItem);
+        invoice.setId(IdType.newRandomUuid());
+
+        // 4. Anhang DocumentReference erstellen
+        DocumentReference anhangDocRef = createTestAnhang(patient);
+        anhangDocRef.setId(IdType.newRandomUuid());
+
+        // 5. "Haupt" DocumentReference (für die Rechnung) erstellen
+        DocumentReference rechnungsDocRef = createValidErgDocumentReference(patient, practitioner, organization, invoice, anhangDocRef.getIdElement().getIdPart());
+        rechnungsDocRef.setId(IdType.newRandomUuid());
+
+        // 6. PDF für die Invoice generieren
+        byte[] pdfData = null;
+        try {
+            pdfData = createPdfFromInvoice(invoice);
+        } catch (IOException e) {
+            logger.error("Fehler beim Erstellen des PDFs für die spezifische Invoice mit ID {}: {}", invoice.getIdElement().getIdPart(), e.getMessage(), e);
+        }
+
+        GeneratedReferencingResources result = new GeneratedReferencingResources();
+        result.chargeItem = chargeItem;
+        result.invoice = invoice;
+        result.invoiceDocumentReference = rechnungsDocRef;
+        result.attachmentDocumentReference = anhangDocRef;
+        result.invoicePdfData = pdfData;
+
+        return result;
+    }
+
+    /**
      * Generiert alle Testressourcen und speichert sie als JSON-Dateien.
      * Die Dateien werden im Verzeichnis 'src/test/resources/generated-test-resources' abgelegt.
      */
@@ -921,7 +1007,7 @@ public class ErgTestResourceUtil {
      * @param filePath Der Pfad zur Ausgabedatei.
      * @throws IOException Bei Fehlern während des Schreibvorgangs.
      */
-    private static void saveResourceToJson(FhirContext ctx, Resource resource, Path filePath) throws IOException {
+    public static void saveResourceToJson(FhirContext ctx, Resource resource, Path filePath) throws IOException {
         // Stelle sicher, dass die Ressource eine ID hat, bevor sie serialisiert wird, wenn sie noch keine hat.
         // Dies ist nützlich, wenn Referenzen auf diese Ressource in anderen Ressourcen erstellt werden.
         if (resource.getIdElement().isEmpty()) {

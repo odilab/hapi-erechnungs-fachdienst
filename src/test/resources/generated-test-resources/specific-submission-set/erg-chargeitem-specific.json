@@ -1,0 +1,39 @@
+{
+  "resourceType": "ChargeItem",
+  "meta": {
+    "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-rechnungsposition|1.1.0-RC1" ]
+  },
+  "extension": [ {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-rechnungsposition-type",
+    "valueCoding": {
+      "system": "https://gematik.de/fhir/erg/CodeSystem/erg-chargeitem-type-CS",
+      "code": "GOÄ"
+    }
+  } ],
+  "status": "billable",
+  "code": {
+    "coding": [ {
+      "system": "http://fhir.de/CodeSystem/bäk/goä",
+      "code": "1",
+      "display": "Beratung"
+    } ]
+  },
+  "subject": {
+    "reference": "Patient/3b220526-575b-4bbb-b81f-d0520abb4ef9"
+  },
+  "occurrencePeriod": {
+    "start": "2025-05-15T09:26:51+02:00",
+    "end": "2025-05-15T09:26:51+02:00"
+  },
+  "quantity": {
+    "value": 1,
+    "unit": "Stück",
+    "system": "http://unitsofmeasure.org",
+    "code": "{unit}"
+  },
+  "factorOverride": 2.3,
+  "priceOverride": {
+    "value": 10.72,
+    "currency": "EUR"
+  }
+}

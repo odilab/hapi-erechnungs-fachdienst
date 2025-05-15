@@ -1,0 +1,133 @@
+{
+  "resourceType": "Invoice",
+  "meta": {
+    "profile": [ "https://gematik.de/fhir/erg/StructureDefinition/erg-rechnung|1.1.0-RC1" ]
+  },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">ERG Privatrechnung</div>"
+  },
+  "extension": [ {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-behandlungsart",
+    "valueCoding": {
+      "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+      "code": "AMB"
+    }
+  }, {
+    "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-fachrichtung",
+    "valueCoding": {
+      "system": "http://ihe-d.de/CodeSystems/AerztlicheFachrichtungen",
+      "code": "ALLG"
+    }
+  } ],
+  "identifier": [ {
+    "type": {
+      "coding": [ {
+        "system": "https://gematik.de/fhir/erg/CodeSystem/erg-rechnung-identifier-type-cs",
+        "code": "invoice"
+      } ]
+    },
+    "system": "urn:oid:1.2.276.0.76.4.10",
+    "value": "ERG-R-20250515092651"
+  } ],
+  "status": "issued",
+  "type": {
+    "coding": [ {
+      "system": "https://gematik.de/fhir/erg/CodeSystem/erg-rechnungsart-cs",
+      "code": "ABSCHLUSS"
+    } ]
+  },
+  "subject": {
+    "reference": "Patient/3b220526-575b-4bbb-b81f-d0520abb4ef9",
+    "display": "Patient mit ID 3b220526-575b-4bbb-b81f-d0520abb4ef9"
+  },
+  "recipient": {
+    "reference": "Patient/3b220526-575b-4bbb-b81f-d0520abb4ef9",
+    "identifier": {
+      "system": "http://fhir.de/sid/gkv/kvid-10",
+      "value": "X294011405"
+    },
+    "display": "Patient mit ID 3b220526-575b-4bbb-b81f-d0520abb4ef9"
+  },
+  "date": "2025-05-15T09:26:51+02:00",
+  "participant": [ {
+    "role": {
+      "coding": [ {
+        "system": "https://gematik.de/fhir/erg/CodeSystem/erg-participant-role-CS",
+        "code": "leistungserbringer"
+      } ]
+    },
+    "actor": {
+      "reference": "Practitioner/99107c5e-cf3d-4314-99a0-118d14e855fb",
+      "identifier": {
+        "type": {
+          "coding": [ {
+            "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+            "code": "PRN"
+          } ]
+        },
+        "system": "https://gematik.de/fhir/sid/telematik-id",
+        "value": "1-HBA-DUMMY-11406"
+      },
+      "display": "Practitioner mit ID 99107c5e-cf3d-4314-99a0-118d14e855fb"
+    }
+  } ],
+  "issuer": {
+    "reference": "Organization/c583dc6b-fed5-4d9d-8aba-38460cce7670",
+    "identifier": {
+      "type": {
+        "coding": [ {
+          "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+          "code": "PRN"
+        } ]
+      },
+      "system": "https://gematik.de/fhir/sid/telematik-id",
+      "value": "5-SMC-B-DUMMY-11406"
+    },
+    "display": "Organisation mit ID c583dc6b-fed5-4d9d-8aba-38460cce7670"
+  },
+  "lineItem": [ {
+    "sequence": 1,
+    "chargeItemReference": {
+      "reference": "ChargeItem/urn:uuid:b5d04ce4-eee9-4025-ad92-96905b17f931"
+    },
+    "priceComponent": [ {
+      "type": "base",
+      "amount": {
+        "value": 10.72,
+        "currency": "EUR"
+      }
+    } ]
+  } ],
+  "totalPriceComponent": [ {
+    "type": "base",
+    "code": {
+      "coding": [ {
+        "system": "https://gematik.de/fhir/erg/CodeSystem/erg-total-price-component-type-cs",
+        "code": "SummeRechnungspositionen"
+      } ]
+    },
+    "amount": {
+      "value": 10.72,
+      "currency": "EUR"
+    }
+  } ],
+  "totalNet": {
+    "value": 10.72,
+    "currency": "EUR"
+  },
+  "totalGross": {
+    "value": 10.72,
+    "currency": "EUR"
+  },
+  "paymentTerms": "Zahlungsziel: 14 Tage netto",
+  "_paymentTerms": {
+    "extension": [ {
+      "url": "https://gematik.de/fhir/erg/StructureDefinition/erg-zahlungsziel",
+      "valueDate": "2025-05-29"
+    } ]
+  },
+  "note": [ {
+    "text": "Hinweis für den Kostenträger."
+  } ]
+}
