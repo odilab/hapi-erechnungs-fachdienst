@@ -1,0 +1,591 @@
+openapi: 3.0.0
+info:
+  title: HAPI FHIR Fachdienst API
+  version: "1.0.0"
+  description: API für den HAPI FHIR Fachdienst mit benutzerdefinierten Operationen.
+servers:
+  - url: http://localhost:8080/fhir # Standardport aus application.yaml, ggf. anpassen
+    description: Lokaler Entwicklungsserver
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Bearer Token für die Authentifizierung (z.B. aus dem VAU-Flow oder direkter Authentifizierung)."
+  schemas:
+    # FHIR-Ressourcen werden hier vereinfacht dargestellt.
+    # In einer echten Umgebung würden detaillierte Schemas oder Referenzen zu FHIR-Profilen verwendet.
+    FHIR_Parameters:
+      type: object
+      description: "Eine FHIR Parameters Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Parameters
+    FHIR_DocumentReference:
+      type: object
+      description: "Eine FHIR DocumentReference Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: DocumentReference
+    FHIR_OperationOutcome:
+      type: object
+      description: "Eine FHIR OperationOutcome Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: OperationOutcome
+    FHIR_Binary:
+      type: object
+      description: "Eine FHIR Binary Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Binary
+    FHIR_Invoice:
+      type: object
+      description: "Eine FHIR Invoice Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Invoice
+    FHIR_Patient:
+      type: object
+      description: "Eine FHIR Patient Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Patient
+    FHIR_Practitioner:
+      type: object
+      description: "Eine FHIR Practitioner Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Practitioner
+    FHIR_Organization:
+      type: object
+      description: "Eine FHIR Organization Ressource. Details siehe FHIR Spezifikation."
+      properties:
+        resourceType:
+          type: string
+          example: Organization
+    FHIR_Coding:
+      type: object
+      description: "Ein FHIR Coding Datentyp."
+      properties:
+        system:
+          type: string
+        code:
+          type: string
+        display:
+          type: string
+    FHIR_Signature:
+      type: object
+      description: "Ein FHIR Signature Datentyp."
+    # Schemas für Request Bodies der Operationen
+    ChangeStatusRequest:
+      type: object
+      required:
+        - tag
+      properties:
+        tag:
+          type: string
+          description: "Der neue Status-Code."
+          enum: ["offen", "erledigt", "papierkorb"]
+    ProcessFlagRequest:
+      type: object
+      required:
+        - markierung
+        - zeitpunkt
+      properties:
+        markierung:
+          $ref: '#/components/schemas/FHIR_Coding'
+        zeitpunkt:
+          type: string
+          format: date-time
+          description: "Zeitpunkt der Markierung."
+        details:
+          type: string
+          description: "Optionale Details zur Markierung."
+        gelesen:
+          type: boolean
+          description: "Gelesen-Status (erforderlich wenn markierung.code = 'gelesen')."
+        artDerArchivierung:
+          $ref: '#/components/schemas/FHIR_Coding'
+          description: "Details zur Art der Archivierung (erforderlich wenn markierung.code = 'archiviert')."
+    SubmitErechnungRequest:
+      type: object
+      required:
+        - rechnung
+      properties:
+        rechnung:
+          $ref: '#/components/schemas/FHIR_DocumentReference'
+          description: "Das Hauptrechnungsdokument."
+        anhang:
+          type: array
+          items:
+            $ref: '#/components/schemas/FHIR_DocumentReference'
+          description: "Optionale Anhänge zur Rechnung."
+        modus:
+          type: string
+          description: "Modus der Einreichung."
+          enum: ["normal", "test"]
+        angereichertesPDF:
+          type: boolean
+          description: "Ob ein angereichertes PDF zusätzlich zurückgegeben werden soll."
+    RetrieveDocumentRequest:
+      type: object
+      properties:
+        retrieveAngereichertesPDF:
+          type: boolean
+          default: false
+        retrieveStrukturierteDaten:
+          type: boolean
+          default: false
+        retrieveOriginalPDF:
+          type: boolean
+          default: false
+        retrieveSignatur:
+          type: boolean
+          default: false
+
+security:
+  - BearerAuth: [] # Globale Sicherheitseinstellung, gilt für alle Pfade, sofern nicht überschrieben
+
+paths:
+  /DocumentReference/{id}/$change-status:
+    post:
+      tags:
+        - DocumentReference Operations
+      summary: Ändert den Status eines DocumentReference.
+      operationId: changeStatusOperation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID der DocumentReference Ressource.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+          application/json: # Alternativ als JSON Body, wenn OperationParam als komplexe Objekte erwartet
+            schema:
+              $ref: '#/components/schemas/ChangeStatusRequest'
+      responses:
+        '200':
+          description: Erfolgreiche Statusänderung. Gibt die aktualisierten Meta-Informationen zurück.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Parameters'
+        '400':
+          description: Ungültige Anfrage (z.B. ungültiger Status-Code).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '404':
+          description: DocumentReference nicht gefunden.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '422':
+          description: Unverarbeitbare Entität.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /DocumentReference/{id}/$erase:
+    post: # FHIR $erase ist oft ein POST, auch wenn es löscht
+      tags:
+        - DocumentReference Operations
+      summary: Löscht eine DocumentReference und zugehörige Daten.
+      operationId: eraseOperation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID der DocumentReference Ressource, die gelöscht werden soll.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Erfolgreich gelöscht. Gibt ein OperationOutcome zurück.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '400':
+          description: Ungültige Anfrage (z.B. ID fehlt).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '404':
+          description: DocumentReference nicht gefunden.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /DocumentReference/{id}/$process-flag:
+    post:
+      tags:
+        - DocumentReference Operations
+      summary: Verarbeitet Markierungen (Flags) für eine DocumentReference.
+      operationId: processFlagOperation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID der DocumentReference Ressource.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Parameter für die $process-flag Operation.
+        content:
+          application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
+            schema:
+              $ref: '#/components/schemas/ProcessFlagRequest'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessFlagRequest'
+      responses:
+        '200':
+          description: Markierung erfolgreich verarbeitet. Gibt die aktualisierten Meta-Informationen zurück.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Parameters'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '404':
+          description: DocumentReference nicht gefunden.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '422':
+          description: Unverarbeitbare Entität (z.B. fehlende Pflichtparameter).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /DocumentReference/{id}/$retrieve: # Annahme basierend auf DocumentProcessorService & RetrieveOperationProvider
+    post: # Könnte auch GET mit Query-Parametern sein
+      tags:
+        - DocumentReference Operations
+      summary: Ruft eine DocumentReference und optional zugehörige Daten ab.
+      operationId: retrieveDocumentOperation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID der DocumentReference Ressource.
+          schema:
+            type: string
+      requestBody:
+        description: Parameter für die $retrieve Operation.
+        content:
+          application/json: # oder application/x-www-form-urlencoded
+            schema:
+              $ref: '#/components/schemas/RetrieveDocumentRequest'
+      responses:
+        '200':
+          description: Erfolgreicher Abruf.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Parameters' # Enthält dokumentMetadaten, angereichertesPDF, etc.
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '404':
+          description: DocumentReference nicht gefunden.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /Patient/{id}/$erechnung-submit:
+    post:
+      tags:
+        - Patient Operations
+      summary: Reicht eine E-Rechnung für einen Patienten ein.
+      operationId: submitErechnungOperation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID der Patient Ressource.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Parameter für die $erechnung-submit Operation.
+        # FHIR Operationen können Parameter als FHIR Parameters Ressource oder via form-urlencoded erwarten.
+        # Hier wird application/json für eine einfachere Darstellung des Request Body Schemas gewählt.
+        # In der Praxis könnte dies eine Parameters Ressource sein, die die untenstehenden Properties enthält.
+        content:
+          application/json: # oder application/x-www-form-urlencoded
+            schema:
+              $ref: '#/components/schemas/SubmitErechnungRequest'
+
+      responses:
+        '200':
+          description: Rechnung erfolgreich eingereicht oder Validierungsergebnis im Test-Modus.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Parameters' # Enthält ergToken, angereichertesPDF, warnungen, status
+        '400':
+          description: Ungültige Anfrage (z.B. 'rechnung' Parameter fehlt).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler (z.B. Versicherter versucht einzureichen).
+        '422':
+          description: Unverarbeitbare Entität (z.B. Validierungsfehler, ungültiger Modus).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /VAUCertificate:
+    get:
+      tags:
+        - VAU
+      summary: Ruft das öffentliche Zertifikat des VAU-Servers ab.
+      operationId: getVAUCertificate
+      # Security für diesen Pfad könnte spezifisch sein, hier global durch BearerAuth abgedeckt.
+      # Wenn unauthentifiziert, müsste hier security: [] stehen.
+      responses:
+        '200':
+          description: Erfolgreich. Das Zertifikat im PKIX-Format.
+          content:
+            application/pkix-cert:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Interner Serverfehler beim Laden des Zertifikats.
+
+  /VAUCertificateOCSPResponse:
+    get:
+      tags:
+        - VAU
+      summary: Ruft die OCSP-Response für das VAU-Zertifikat ab.
+      operationId: getVAUCertificateOCSPResponse
+      # Security wie bei /VAUCertificate
+      responses:
+        '200':
+          description: Erfolgreich. Die OCSP-Response.
+          content:
+            application/ocsp-response:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Interner Serverfehler.
+
+  /VAU/{userpseudonym}:
+    post:
+      tags:
+        - VAU
+      summary: Verarbeitet eine verschlüsselte VAU-Anfrage.
+      operationId: handleVAURequest
+      parameters:
+        - name: userpseudonym
+          in: path
+          required: true
+          description: Benutzerpseudonym für den VAU-Request. "0" für den ersten Request.
+          schema:
+            type: string
+        - name: X-erp-user
+          in: header
+          required: true
+          description: Typ des Benutzers ('l' für Leistungserbringer, 'v' für Versicherter).
+          schema:
+            type: string
+            enum: [l, v]
+        - name: X-erp-resource
+          in: header
+          required: true
+          description: Zielressource des inneren Requests.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Verschlüsselte VAU-Anfrage.
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Erfolgreich. Verschlüsselte VAU-Antwort.
+          headers:
+            Userpseudonym:
+              description: Neues Userpseudonym für den nächsten Request.
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '422':
+          description: Unverarbeitbare Entität (z.B. ungültige Header, Fehler bei Entschlüsselung/Verarbeitung).
+          # Der Body hier ist die unverschlüsselte FHIR OperationOutcome im Fehlerfall des inneren Requests.
+          content:
+            application/fhir+json: # Wenn der innere Request fehlschlägt und eine OperationOutcome zurückgibt
+                schema:
+                    $ref: '#/components/schemas/FHIR_OperationOutcome'
+            application/octet-stream: # Wenn die VAU-Schicht selbst einen Fehler hat, könnte es auch octet-stream sein
+                schema:
+                    type: string
+                    format: binary
+
+  /Patient:
+    post:
+      tags:
+        - Patient
+      summary: Erstellt eine neue Patient Ressource.
+      operationId: createPatient
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Die zu erstellende Patient Ressource.
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/FHIR_Patient'
+      responses:
+        '201':
+          description: Patient Ressource erfolgreich erstellt.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Patient'
+        '400':
+          description: Ungültige Anfrage (z.B. fehlerhafte FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '422':
+          description: Unverarbeitbare Entität (z.B. Validierungsfehler der FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /Practitioner:
+    post:
+      tags:
+        - Practitioner
+      summary: Erstellt eine neue Practitioner Ressource.
+      operationId: createPractitioner
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Die zu erstellende Practitioner Ressource.
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/FHIR_Practitioner'
+      responses:
+        '201':
+          description: Practitioner Ressource erfolgreich erstellt.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Practitioner'
+        '400':
+          description: Ungültige Anfrage (z.B. fehlerhafte FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '422':
+          description: Unverarbeitbare Entität (z.B. Validierungsfehler der FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+
+  /Organization:
+    post:
+      tags:
+        - Organization
+      summary: Erstellt eine neue Organization Ressource.
+      operationId: createOrganization
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        description: Die zu erstellende Organization Ressource.
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/FHIR_Organization'
+      responses:
+        '201':
+          description: Organization Ressource erfolgreich erstellt.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_Organization'
+        '400':
+          description: Ungültige Anfrage (z.B. fehlerhafte FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome'
+        '401':
+          description: Authentifizierungsfehler.
+        '403':
+          description: Autorisierungsfehler.
+        '422':
+          description: Unverarbeitbare Entität (z.B. Validierungsfehler der FHIR Ressource).
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/FHIR_OperationOutcome' 
