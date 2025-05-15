@@ -23,6 +23,39 @@ components:
         resourceType:
           type: string
           example: Parameters
+        parameter:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: "Der Name des Parameters."
+              valueString:
+                type: string
+              valueBoolean:
+                type: boolean
+              valueInteger:
+                type: integer
+              valueDecimal:
+                type: number
+              valueDateTime:
+                type: string
+                format: date-time
+              valueDate:
+                type: string
+                format: date
+              valueCode:
+                type: string
+              valueUri:
+                type: string
+              valueId:
+                type: string
+              valueCoding:
+                $ref: '#/components/schemas/FHIR_Coding'
+              resource: # Für komplexe FHIR Ressourcen als Parameter
+                type: object
+                description: "Eine FHIR Ressource, die als Parameter dient."
     FHIR_DocumentReference:
       type: object
       description: "Eine FHIR DocumentReference Ressource. Details siehe FHIR Spezifikation."
@@ -174,10 +207,18 @@ paths:
         content:
           application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
             schema:
-              $ref: '#/components/schemas/ChangeStatusRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ChangeStatusRequest
           application/json: # Alternativ als JSON Body, wenn OperationParam als komplexe Objekte erwartet
             schema:
-              $ref: '#/components/schemas/ChangeStatusRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ChangeStatusRequest
+            examples:
+              beispiel:
+                summary: Beispiel für $change-status
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    - name: "tag"
+                      valueString: "erledigt" # Mögliche Werte: offen, erledigt, papierkorb
       responses:
         '200':
           description: Erfolgreiche Statusänderung. Gibt die aktualisierten Meta-Informationen zurück.
@@ -264,10 +305,44 @@ paths:
         content:
           application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
             schema:
-              $ref: '#/components/schemas/ProcessFlagRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ProcessFlagRequest
           application/json:
             schema:
-              $ref: '#/components/schemas/ProcessFlagRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ProcessFlagRequest
+            examples:
+              beispielGelesen:
+                summary: Beispiel für $process-flag - gelesen markieren
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    - name: "markierung"
+                      valueCoding:
+                        system: "https://gematik.de/fhir/erg/CodeSystem/erg-documentreference-markierung-cs" # Beispielsystem
+                        code: "gelesen"
+                        display: "Gelesen"
+                    - name: "zeitpunkt"
+                      valueDateTime: "2024-01-15T10:00:00Z"
+                    - name: "gelesen"
+                      valueBoolean: true
+              beispielArchiviert:
+                summary: Beispiel für $process-flag - archivieren
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    - name: "markierung"
+                      valueCoding:
+                        system: "https://gematik.de/fhir/erg/CodeSystem/erg-documentreference-markierung-cs" # Beispielsystem
+                        code: "archiviert"
+                        display: "Archiviert"
+                    - name: "zeitpunkt"
+                      valueDateTime: "2024-01-16T11:00:00Z"
+                    - name: "artDerArchivierung"
+                      valueCoding:
+                        system: "https://gematik.de/fhir/erg/CodeSystem/erg-dokument-artderarchivierung-cs" # Beispielsystem
+                        code: "persoenlich"
+                        display: "Persönliche Ablage"
+                    - name: "details"
+                      valueString: "Archivierung durch den Nutzer."
       responses:
         '200':
           description: Markierung erfolgreich verarbeitet. Gibt die aktualisierten Meta-Informationen zurück.
@@ -310,7 +385,22 @@ paths:
         content:
           application/json: # oder application/x-www-form-urlencoded
             schema:
-              $ref: '#/components/schemas/RetrieveDocumentRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von RetrieveDocumentRequest
+            examples:
+              beispiel:
+                summary: Beispiel für $retrieve
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    # Die ID/token der DocumentReference wird über den Pfad {id} übergeben
+                    - name: "returnAngereichertesPDF"
+                      valueBoolean: true
+                    - name: "returnStrukturierteDaten"
+                      valueBoolean: false
+                    - name: "returnOriginalPDF"
+                      valueBoolean: true
+                    - name: "returnSignatur"
+                      valueBoolean: false
       responses:
         '200':
           description: Erfolgreicher Abruf.
@@ -351,7 +441,50 @@ paths:
         content:
           application/json: # oder application/x-www-form-urlencoded
             schema:
-              $ref: '#/components/schemas/SubmitErechnungRequest'
+              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von SubmitErechnungRequest
+            examples:
+              minimalBeispiel:
+                summary: Minimales Beispiel für $erechnung-submit
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    - name: "rechnung"
+                      resource:
+                        resourceType: "DocumentReference"
+                        status: "current"
+                        # ... weitere Pflichtfelder und relevante Extensions für DocumentReference ...
+                        content:
+                          - attachment:
+                              contentType: "application/pdf"
+                              # data: "JVBERi0..." (gekürzt)
+                    - name: "modus"
+                      valueCode: "normal"
+              vollstaendigesBeispiel:
+                summary: Detailliertes Beispiel basierend auf Nutzer-Input
+                value:
+                  resourceType: "Parameters"
+                  parameter:
+                    - name: "rechnung"
+                      resource:
+                        resourceType: "DocumentReference"
+                        meta:
+                          profile: [ "https://gematik.de/fhir/erg/StructureDefinition/erg-dokumentenmetadaten|1.1.0-RC1" ]
+                        # ... (stark gekürzte Darstellung der DocumentReference für Lesbarkeit)
+                        identifier: [ { system: "urn:oid:1.2.276.0.76.4.10", value: "DOC-..." } ]
+                        status: "current"
+                        subject: { reference: "Patient/patient-id" }
+                        content: [ { attachment: { contentType: "application/pdf", data: "JVBERi..." } } ]
+                    - name: "anhang" # Kann mehrfach vorkommen für mehrere Anhänge
+                      resource:
+                        resourceType: "DocumentReference"
+                        status: "current"
+                        subject: { reference: "Patient/patient-id" }
+                        # ... (stark gekürzte Darstellung)
+                        content: [ { attachment: { contentType: "application/pdf", data: "UkVsR..." } } ]
+                    - name: "modus"
+                      valueCode: "normal" # oder "test"
+                    - name: "angereichertesPDF"
+                      valueBoolean: true # oder false
 
       responses:
         '200':
