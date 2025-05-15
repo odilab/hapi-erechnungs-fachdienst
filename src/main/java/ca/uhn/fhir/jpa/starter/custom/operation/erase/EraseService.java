@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,10 @@ public class EraseService {
         // 1. Statusprüfung (muss "PAPIERKORB" sein)
         checkDocumentStatus(documentReferenceToExpunge);
 
-        // 2. Sammle alle zu löschenden Ressourcen-IDs
+        // 1.5. Eingehende Referenzen von AuditEvents auf die primäre (Papierkorb) DocumentReference aktualisieren
+        updateReferencesToResource(docRefIdToExpunge, AuditEvent.class, "AuditEvent", accessToken);
+
+        // 2. Sammle alle zu löschenden Ressourcen-IDs (inkl. Original-DR, Anhänge etc.)
         ResourcesToDelete allResourcesToDelete = new ResourcesToDelete();
         collectAllAssociatedResourceIds(documentReferenceToExpunge, allResourcesToDelete, true);
 
@@ -77,8 +81,21 @@ public class EraseService {
             LOGGER.error("Fehler beim Löschen der Haupt-DocumentReference (Papierkorb-Version) ID {}: {}", docRefIdToExpunge.getValue(), e.getMessage(), e);
             throw new InternalErrorException("Konnte Haupt-DocumentReference (Papierkorb-Version) " + docRefIdToExpunge.getValue() + " nicht löschen: " + e.getMessage(), e);
         }
-        // Entferne die soeben gelöschte Haupt-DR aus der Liste, falls sie gesammelt wurde (sollte nicht, da wir sie separat behandeln)
+        // Entferne die soeben gelöschte Haupt-DR aus der Liste, falls sie gesammelt wurde
         allResourcesToDelete.documentReferenceIds.remove(docRefIdToExpunge);
+
+        // 3. Eingehende Referenzen von AuditEvents auf alle *anderen* gesammelten DocumentReferences aktualisieren,
+        //    bevor diese gelöscht werden.
+        for (IdType collectedDocRefId : new HashSet<>(allResourcesToDelete.documentReferenceIds)) {
+            updateReferencesToResource(collectedDocRefId, AuditEvent.class, "AuditEvent", accessToken);
+        }
+        // Optional: Selbiges für Binary und Invoice, falls diese von AuditEvents direkt referenziert werden könnten.
+        // for (IdType collectedBinaryId : new HashSet<>(allResourcesToDelete.binaryIds)) {
+        //    updateReferencesToResource(collectedBinaryId, AuditEvent.class, "AuditEvent", accessToken);
+        // }
+        // for (IdType collectedInvoiceId : new HashSet<>(allResourcesToDelete.invoiceIds)) {
+        //    updateReferencesToResource(collectedInvoiceId, AuditEvent.class, "AuditEvent", accessToken);
+        // }
 
         // 4. Lösche alle gesammelten assoziierten Ressourcen
         deleteCollectedResources(allResourcesToDelete);
@@ -201,5 +218,81 @@ public class EraseService {
             throw new InvalidRequestException(message);
         }
         LOGGER.info("Statusprüfung für DocumentReference ID {} erfolgreich (Status ist 'PAPIERKORB').", documentReference.getIdElement().getIdPart());
+    }
+
+    /**
+     * Sucht nach Ressourcen eines bestimmten Typs (z.B. AuditEvent), die auf die angegebene {@code resourceIdToUpdate} verweisen,
+     * und modifiziert diese Referenzen. Die direkte Referenz wird entfernt und stattdessen ein Identifier gesetzt.
+     *
+     * @param resourceIdToUpdate Die ID der Ressource, auf die verwiesen wird und die bald gelöscht wird.
+     * @param referencingResourceType Das Klassentyp der referenzierenden Ressource (z.B. AuditEvent.class).
+     * @param referencingResourceName Der FHIR-Name des Ressourcentyps (z.B. "AuditEvent").
+     * @param accessToken Der AccessToken für Logging-Zwecke.
+     */
+    private <T extends Resource> void updateReferencesToResource(IdType resourceIdToUpdate, Class<T> referencingResourceType, String referencingResourceName, AccessToken accessToken) {
+        if (resourceIdToUpdate == null || !resourceIdToUpdate.hasResourceType() || !resourceIdToUpdate.hasIdPart()) {
+            LOGGER.warn("updateReferencesToResource: Ungültige resourceIdToUpdate: {}", resourceIdToUpdate != null ? resourceIdToUpdate.getValue() : "null");
+            return;
+        }
+
+        String searchUrl = referencingResourceName + "?entity=" + resourceIdToUpdate.getValue();
+        LOGGER.info("Suche nach {}s, die auf {} verweisen, mit Such-URL: {}", referencingResourceName, resourceIdToUpdate.getValue(), searchUrl);
+
+        var referencingResourceDao = daoRegistry.getResourceDao(referencingResourceType);
+        var searchParams = new ca.uhn.fhir.jpa.searchparam.SearchParameterMap();
+        searchParams.add("entity", new ca.uhn.fhir.rest.param.ReferenceParam(resourceIdToUpdate.getValue()));
+
+        var searchResultBundle = referencingResourceDao.search(searchParams);
+
+        List<T> resourcesToUpdate = new ArrayList<>();
+        if (searchResultBundle != null && searchResultBundle.getResources(0, searchResultBundle.size()) != null) {
+            for (IBaseResource resource : searchResultBundle.getResources(0, searchResultBundle.size())) {
+                if (referencingResourceType.isInstance(resource)) {
+                    resourcesToUpdate.add(referencingResourceType.cast(resource));
+                }
+            }
+        }
+
+        if (resourcesToUpdate.isEmpty()) {
+            LOGGER.info("Keine {}s gefunden, die auf {} verweisen und aktualisiert werden müssen.", referencingResourceName, resourceIdToUpdate.getValue());
+            return;
+        }
+
+        LOGGER.info("{} {}s gefunden, die auf {} verweisen und deren Referenzen aktualisiert werden.", resourcesToUpdate.size(), referencingResourceName, resourceIdToUpdate.getValue());
+
+        for (T resource : resourcesToUpdate) {
+            boolean modified = false;
+            if (resource instanceof AuditEvent) {
+                AuditEvent auditEvent = (AuditEvent) resource;
+                for (AuditEvent.AuditEventEntityComponent entity : auditEvent.getEntity()) {
+                    if (entity.hasWhat() && entity.getWhat().hasReference()) {
+                        IdType whatRefId = new IdType(entity.getWhat().getReference());
+                        if (whatRefId.toUnqualifiedVersionless().getValue().equals(resourceIdToUpdate.getValue())) {
+                            LOGGER.debug("Aktualisiere Referenz in AuditEvent ID {} für Entity auf gelöschte Ressource {}", auditEvent.getIdElement().toUnqualifiedVersionless().getValue(), resourceIdToUpdate.getValue());
+                            entity.getWhat().setReference(null); // Entferne direkte Referenz
+                            entity.getWhat().setIdentifier(new Identifier()
+                                .setSystem("urn:ietf:rfc:3986") // Allgemeiner URN Namespace
+                                .setValue(resourceIdToUpdate.getValue())); // Speichere die ID der gelöschten Ressource
+                            entity.getWhat().setDisplay("Referenz auf gelöschte Ressource: " + resourceIdToUpdate.getValue());
+                            modified = true;
+                        }
+                    }
+                }
+            }
+            // Hier könnten weitere Ressourcentypen behandelt werden, falls nötig
+            // else if (resource instanceof AnotherResourceType) { ... }
+
+            if (modified) {
+                try {
+                    referencingResourceDao.update(resource);
+                    LOGGER.info("{} ID {} erfolgreich aktualisiert, um Referenz auf {} zu entfernen/ersetzen.",
+                        referencingResourceName, resource.getIdElement().toUnqualifiedVersionless().getValue(), resourceIdToUpdate.getValue());
+                } catch (Exception e) {
+                    LOGGER.error("Fehler beim Aktualisieren von {} ID {} (Referenz auf {}): {}",
+                        referencingResourceName, resource.getIdElement().toUnqualifiedVersionless().getValue(), resourceIdToUpdate.getValue(), e.getMessage(), e);
+                    throw new InternalErrorException("Konnte referenzierendes " + referencingResourceName + " ID " + resource.getIdElement().toUnqualifiedVersionless().getValue() + " nicht aktualisieren: " + e.getMessage(), e);
+                }
+            }
+        }
     }
 }
