@@ -205,12 +205,9 @@ paths:
       requestBody:
         required: true
         content:
-          application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
+          application/json: # FHIR Operations erwarten i.d.R. eine Parameters-Ressource via FHIR Content-Type
             schema:
-              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ChangeStatusRequest
-          application/json: # Alternativ als JSON Body, wenn OperationParam als komplexe Objekte erwartet
-            schema:
-              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ChangeStatusRequest
+              $ref: '#/components/schemas/FHIR_Parameters'
             examples:
               beispiel:
                 summary: Beispiel für $change-status
