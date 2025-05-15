@@ -300,12 +300,9 @@ paths:
         required: true
         description: Parameter für die $process-flag Operation.
         content:
-          application/x-www-form-urlencoded: # FHIR Operations oft via form-urlencoded oder Parameters-Resource
+          application/json: # FHIR Operations erwarten i.d.R. eine Parameters-Ressource via FHIR Content-Type
             schema:
-              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ProcessFlagRequest
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FHIR_Parameters' # Geändert von ProcessFlagRequest
+              $ref: '#/components/schemas/FHIR_Parameters'
             examples:
               beispielGelesen:
                 summary: Beispiel für $process-flag - gelesen markieren
