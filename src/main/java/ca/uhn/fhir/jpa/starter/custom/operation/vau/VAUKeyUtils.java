@@ -54,11 +54,54 @@ public class VAUKeyUtils {
         }
     }
 
+    /**
+     * Lädt einen privaten Schlüssel aus einem InputStream (für ClassPath-Ressourcen)
+     */
+    public static PrivateKey loadPrivateKey(InputStream keyStream) throws IOException {
+        try (PEMParser pemParser = new PEMParser(new InputStreamReader(keyStream))) {
+            Object obj = pemParser.readObject();
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter()
+                .setProvider(new BouncyCastleProvider());
+
+            if (obj instanceof PEMKeyPair) {
+                return converter.getPrivateKey(((PEMKeyPair) obj).getPrivateKeyInfo());
+            } else if (obj instanceof PrivateKeyInfo) {
+                return converter.getPrivateKey((PrivateKeyInfo) obj);
+            }
+            throw new IOException("Unbekanntes Schlüsselformat");
+        } catch (Exception e) {
+            throw new IOException("Fehler beim Laden des privaten Schlüssels: " + e.getMessage(), e);
+        }
+    }
+
     public static PublicKey loadPublicKey(Path keyPath) throws IOException {
         try (PEMParser pemParser = new PEMParser(new FileReader(keyPath.toFile()))) {
             Object obj = pemParser.readObject();
             if (obj == null) {
                 throw new IOException("Konnte keinen öffentlichen Schlüssel aus der Datei lesen");
+            }
+            
+            if (!(obj instanceof SubjectPublicKeyInfo)) {
+                throw new IOException("Ungültiges Format für öffentlichen Schlüssel");
+            }
+            
+            JcaPEMKeyConverter converter = new JcaPEMKeyConverter()
+                .setProvider(new BouncyCastleProvider());
+            
+            return converter.getPublicKey((SubjectPublicKeyInfo) obj);
+        } catch (Exception e) {
+            throw new IOException("Fehler beim Laden des öffentlichen Schlüssels: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Lädt einen öffentlichen Schlüssel aus einem InputStream (für ClassPath-Ressourcen)
+     */
+    public static PublicKey loadPublicKey(InputStream keyStream) throws IOException {
+        try (PEMParser pemParser = new PEMParser(new InputStreamReader(keyStream))) {
+            Object obj = pemParser.readObject();
+            if (obj == null) {
+                throw new IOException("Konnte keinen öffentlichen Schlüssel aus dem Stream lesen");
             }
             
             if (!(obj instanceof SubjectPublicKeyInfo)) {

@@ -5,6 +5,7 @@ import ca.uhn.fhir.jpa.api.dao.DaoRegistry;
 import ca.uhn.fhir.jpa.starter.custom.interceptor.auth.AccessToken;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuthorizationService;
 import ca.uhn.fhir.jpa.starter.custom.operation.AuditService;
+import ca.uhn.fhir.jpa.starter.custom.operation.NotificationService;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.IdParam;
@@ -27,16 +28,19 @@ public class SubmitOperationProvider implements IResourceProvider {
 	private final RechnungProcessingService rechnungProcessingService;
 	private final DaoRegistry daoRegistry;
 	private final AuditService auditService;
+	private final NotificationService notificationService;
 
 	@Autowired
 	public SubmitOperationProvider(AuthorizationService authorizationService,
 									RechnungProcessingService rechnungProcessingService,
 									DaoRegistry daoRegistry,
-									AuditService auditService) {
+									AuditService auditService,
+									NotificationService notificationService) {
 		this.authorizationService = authorizationService;
 		this.rechnungProcessingService = rechnungProcessingService;
 		this.daoRegistry = daoRegistry;
 		this.auditService = auditService;
+		this.notificationService = notificationService;
 	}
 
 	@Override
@@ -187,6 +191,20 @@ public class SubmitOperationProvider implements IResourceProvider {
 					// Dieser Wert muss ggf. aus der Logik des RechnungProcessingService oder der DocumentReference selbst kommen.
 					String workflowStatus = "OFFEN"; // Beispielwert, anpassen falls nötig!
 					auditService.addEntityDetail(auditEvent, "workflow-status", workflowStatus);
+					
+					// ERG-Token als durchsuchbares Detail hinzufügen
+					String ergToken = validationResult.transformedRechnung.getIdElement().getIdPart();
+					auditService.addEntityDetail(auditEvent, "erg-token", ergToken);
+					
+					// Benachrichtigung für den Patienten erstellen
+					try {
+						String leistungserbringerName = accessToken.getIdNumber(); // oder anderer passender Name
+						notificationService.createErgTokenNotification(patientId.getIdPart(), ergToken, leistungserbringerName);
+						LOGGER.info("Benachrichtigung für Patient {} über neuen ERG-Token {} erstellt.", patientId.getIdPart(), ergToken);
+					} catch (Exception notificationException) {
+						LOGGER.error("Fehler beim Erstellen der Patient-Benachrichtigung: {}", notificationException.getMessage(), notificationException);
+						// Benachrichtigungsfehler sollen die Hauptoperation nicht beeinträchtigen
+					}
 				}
 
 			} catch (Exception e) {

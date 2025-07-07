@@ -4,6 +4,7 @@ import ca.uhn.fhir.jpa.starter.custom.BaseProviderTest;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.jpa.starter.custom.operation.vau.VAUClientCrypto;
 import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -116,7 +117,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test - Fokus auf Metadaten und strukturierte Daten");
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false)); // Explizit nicht anfordern für diesen Test
@@ -125,7 +125,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -162,7 +162,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test ohne strukturierte Daten (nur Metadaten erwartet)");
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
@@ -171,7 +170,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -205,13 +204,12 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test mit ungültigem Token");
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType("invalid-token-for-test-12345"));
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
             client.operation()
-                .onType(DocumentReference.class)
+                .onInstance(new IdType("DocumentReference/invalid-token-for-test-12345"))
                 .named("$retrieve")
                 .withParameters(params)
                 .withAdditionalHeader("Authorization", authHeader)
@@ -234,9 +232,9 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
-        UnprocessableEntityException exception = assertThrows(UnprocessableEntityException.class, () -> {
+        InvalidRequestException exception = assertThrows(InvalidRequestException.class, () -> {
             client.operation()
-                .onType(DocumentReference.class)
+                .onInstance(new IdType("DocumentReference/"))
                 .named("$retrieve")
                 .withParameters(params)
                 .withAdditionalHeader("Authorization", authHeader)
@@ -244,8 +242,8 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
                 .execute();
         });
         
-        assertTrue(exception.getMessage().contains("Token darf nicht leer sein"), 
-            "Fehlermeldung sollte auf fehlendes Token hinweisen");
+        assertTrue(exception.getMessage().contains("Invalid request"), 
+            "Fehlermeldung sollte auf ungültigen Request hinweisen");
             
         LOGGER.info("Retrieve Operation Test ohne Token erfolgreich abgeschlossen");
     }
@@ -255,11 +253,10 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test ohne Authorization");
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
 
         AuthenticationException exception = assertThrows(AuthenticationException.class, () -> {
             client.operation()
-                .onType(DocumentReference.class)
+                .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
                 .named("$retrieve")
                 .withParameters(params)
                 .execute();
@@ -277,7 +274,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test mit Versicherten-Token (EGK1) - Anforderung aller Teile");
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(true));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
@@ -286,7 +282,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -339,7 +335,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         java.security.PublicKey publicKey = keyFactory.generatePublic(keySpec);
 
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
@@ -349,7 +344,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Request Body erstellt: {} Bytes", requestBody.length());
         
         String innerRequest = String.format(
-            "POST /fhir/DocumentReference/$retrieve HTTP/1.1\r\n" +
+            "POST /fhir/DocumentReference/" + ergTokenForRetrieveTest + "/$retrieve HTTP/1.1\r\n" +
             "Content-Type: application/fhir+json\r\n" +
             "Accept: application/fhir+json\r\n" +
             "scope: invoiceDoc.r\r\n" +
@@ -459,7 +454,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Test zum Herunterladen des Dokuments und Speichern der PDF mit ergToken: {}", ergTokenForRetrieveTest);
 
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         // Für diesen Test wollen wir sicherstellen, dass die originale Rechnung (falls vom Profil unterstützt)
         // und das angereicherte PDF angefordert werden, um alle Pfade zu testen.
@@ -470,7 +464,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1"); // Passende Rolle für den Zugriff
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -570,7 +564,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test mit openid e-rezept Scope und ergToken: {}", ergTokenForRetrieveTest);
         
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(true));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
@@ -579,7 +572,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -632,7 +625,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
     void testRetrieveOnlyAngereichertesPDF() {
         LOGGER.info("Starte Retrieve Test - Nur angereichertes PDF");
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(true));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
@@ -640,7 +632,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -663,7 +655,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         // Im BaseProviderTest wird testRechnungDocRef so erstellt, dass es eine relatesTo transform Referenz hat.
 
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest)); // ergTokenForRetrieveTest verweist auf die *transformierte* (angereicherte) Version
+        // ergTokenForRetrieveTest verweist auf die *transformierte* (angereicherte) Version
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(true));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
@@ -671,7 +663,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -691,7 +683,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
     void testRetrieveOnlySignatur() {
         LOGGER.info("Starte Retrieve Test - Nur Signatur");
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnSignatur").setValue(new BooleanType(true));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
@@ -699,7 +690,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -719,7 +710,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
     void testRetrieveNoOptionalParameters() {
         LOGGER.info("Starte Retrieve Test - Keine optionalen Parameter (nur Metadaten)");
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false));
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));
@@ -727,7 +717,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
 
         String authHeader = "Bearer " + getValidAccessToken("EGK1");
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)
@@ -748,7 +738,6 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         LOGGER.info("Starte Retrieve Operation Test - Fokus auf Markierung-Extension");
 
         Parameters params = new Parameters();
-        params.addParameter().setName("token").setValue(new StringType(ergTokenForRetrieveTest));
         params.addParameter().setName("returnStrukturierteDaten").setValue(new BooleanType(false)); // Nicht relevant für diesen Test
         params.addParameter().setName("returnOriginalPDF").setValue(new BooleanType(false));     // Nicht relevant für diesen Test
         params.addParameter().setName("returnAngereichertesPDF").setValue(new BooleanType(false)); // Nicht relevant für diesen Test
@@ -757,7 +746,7 @@ class RetrieveOperationProviderTest extends BaseProviderTest {
         String authHeader = "Bearer " + getValidAccessToken("EGK1"); // EGK1 als Beispiel
 
         Parameters result = client.operation()
-            .onType(DocumentReference.class)
+            .onInstance(new IdType("DocumentReference/" + ergTokenForRetrieveTest))
             .named("$retrieve")
             .withParameters(params)
             .withAdditionalHeader("Authorization", authHeader)

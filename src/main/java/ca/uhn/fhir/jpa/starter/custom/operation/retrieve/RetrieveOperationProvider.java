@@ -9,6 +9,7 @@ import org.hl7.fhir.r4.model.AuditEvent;
 import org.hl7.fhir.r4.model.Reference;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
+import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
@@ -57,7 +58,7 @@ public class RetrieveOperationProvider implements IResourceProvider {
     /**
      * Implementierung der $retrieve Operation gemäß der Spezifikation
      * 
-     * @param token Das Dokumenttoken zur Identifikation des abzurufenden Dokuments
+     * @param id Das Dokumenttoken zur Identifikation des abzurufenden Dokuments
      * @param returnAngereichertesPDF Steuert, ob das angereicherte PDF zurückgegeben wird
      * @param returnStrukturierteDaten Steuert, ob die strukturierten Rechnungsinhalte zurückgegeben werden
      * @param returnOriginalPDF Steuert, ob das originale PDF zurückgegeben wird
@@ -67,18 +68,18 @@ public class RetrieveOperationProvider implements IResourceProvider {
      */
     @Operation(name = "$retrieve", idempotent = true)
     public Parameters retrieveOperation(
-            @OperationParam(name = "token") StringType token,
+            @IdParam IdType id,
             @OperationParam(name = "returnAngereichertesPDF") BooleanType returnAngereichertesPDF,
             @OperationParam(name = "returnStrukturierteDaten") BooleanType returnStrukturierteDaten,
             @OperationParam(name = "returnOriginalPDF") BooleanType returnOriginalPDF,
             @OperationParam(name = "returnSignatur") BooleanType returnSignatur,
             RequestDetails theRequestDetails
     ) {
-        LOGGER.info("Retrieve Operation gestartet für Token {}", token != null ? token.getValue() : "null");
+        LOGGER.info("Retrieve Operation gestartet für Token {}", id != null ? id.getIdPart() : "null");
         logRequestParameters(returnAngereichertesPDF, returnStrukturierteDaten, returnOriginalPDF, returnSignatur);
 
         // Validiere Token-Parameter
-        validateTokenParameter(token);
+        validateTokenParameter(id);
 
         // Extrahiere und validiere den AccessToken
         AccessToken accessToken = authorizationService.validateAndExtractAccessToken(theRequestDetails);
@@ -87,9 +88,9 @@ public class RetrieveOperationProvider implements IResourceProvider {
         authorizationService.authorizeAccessBasedOnContext(accessToken, theRequestDetails);
 
         // Suche das Dokument anhand des Tokens
-        DocumentReference document = documentRetrievalService.findDocument(token.getValue());
+        DocumentReference document = documentRetrievalService.findDocument(id.getIdPart());
         if (document == null) {
-            throw new ResourceNotFoundException("Kein Dokument mit Token " + token.getValue() + " gefunden");
+            throw new ResourceNotFoundException("Kein Dokument mit Token " + id.getIdPart() + " gefunden");
         }
 
         // Prüfe, ob der Nutzer berechtigt ist, auf dieses Dokument zuzugreifen
@@ -121,7 +122,7 @@ public class RetrieveOperationProvider implements IResourceProvider {
                 new Reference(document.getIdElement().toVersionless()),
                 "DocumentReference", // Korrigierter Resource Name
                 document.getIdElement().toVersionless().getValue(), // entityWhatDisplay
-                "DocumentReference mit Token '" + token + "' abgerufen durch Versicherten.",
+                "DocumentReference mit Token '" + id.getIdPart() + "' abgerufen durch Versicherten.",
                 accessToken.getIdNumber(), // actorName
                 kvnr, // actorId (KVNR des Versicherten)
                 patientReference // patientReference für Versicherter-Slice
@@ -131,7 +132,7 @@ public class RetrieveOperationProvider implements IResourceProvider {
             // Die Hauptoperation sollte hierdurch nicht fehlschlagen
         }
 
-        LOGGER.info("Retrieve Operation erfolgreich beendet für Token {}", token.getValue());
+        LOGGER.info("Retrieve Operation erfolgreich beendet für Token {}", id.getIdPart());
         return response;
     }
 
@@ -151,8 +152,8 @@ public class RetrieveOperationProvider implements IResourceProvider {
     /**
      * Validiert den Token-Parameter
      */
-    private void validateTokenParameter(StringType token) {
-        if (token == null || token.getValue() == null || token.getValue().isEmpty()) {
+    private void validateTokenParameter(IdType id) {
+        if (id == null || !id.hasIdPart() || id.getIdPart().isEmpty()) {
             throw new UnprocessableEntityException("Token darf nicht leer sein");
         }
     }

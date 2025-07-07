@@ -19,8 +19,10 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.*;
@@ -146,12 +148,38 @@ public class VAUServerCrypto {
     }
 
     private PrivateKey loadServerPrivateKey() throws Exception {
+        // Versuche zuerst ClassPath-Ressource (für Container)
+        InputStream keyStream = getClass().getResourceAsStream("/certificates/id_enc/fd_id_enc");
+        if (keyStream != null) {
+            try (InputStream stream = keyStream) {
+                return VAUKeyUtils.loadPrivateKey(stream);
+            }
+        }
+        
+        // Fallback auf Dateisystem (für lokale Entwicklung)
         Path keyPath = Paths.get("src/main/resources/certificates/id_enc/fd_id_enc");
-        return VAUKeyUtils.loadPrivateKey(keyPath);
+        if (Files.exists(keyPath)) {
+            return VAUKeyUtils.loadPrivateKey(keyPath);
+        }
+        
+        throw new IOException("VAU privater Schlüssel nicht gefunden (weder in ClassPath noch im Dateisystem)");
     }
 
     private PublicKey loadServerPublicKey() throws Exception {
+        // Versuche zuerst ClassPath-Ressource (für Container)
+        InputStream keyStream = getClass().getResourceAsStream("/certificates/id_enc/fd_id_enc.pub");
+        if (keyStream != null) {
+            try (InputStream stream = keyStream) {
+                return VAUKeyUtils.loadPublicKey(stream);
+            }
+        }
+        
+        // Fallback auf Dateisystem (für lokale Entwicklung)
         Path certPath = Paths.get("src/main/resources/certificates/id_enc/fd_id_enc.pub");
-        return VAUKeyUtils.loadPublicKey(certPath);
+        if (Files.exists(certPath)) {
+            return VAUKeyUtils.loadPublicKey(certPath);
+        }
+        
+        throw new IOException("VAU öffentlicher Schlüssel nicht gefunden (weder in ClassPath noch im Dateisystem)");
     }
 } 
