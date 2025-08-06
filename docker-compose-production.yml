@@ -1,0 +1,150 @@
+services:
+  # ERG Frontend - Veröffentlichtes GHCR Image
+  erg-frontend:
+    image: ghcr.io/odilab/erg-frontend:latest
+    #container_name: erg-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      # Container-zu-Container Kommunikation (wie in docker-compose.yml)
+      - IDP_BASE_URL=https://spring-erp-services-local:3001
+      - NEXT_PUBLIC_FHIR_BASE_URL=http://hapi-fhir-jpaserver-start:8080/fhir
+    depends_on:
+      - spring-erp-services-local
+      - hapi-fhir-jpaserver-start
+    restart: unless-stopped
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+  # Spring ERP Services - EXAKT wie in docker-compose.backend.yml
+  spring-erp-services-local:
+    hostname: spring-erp-services
+    #container_name: spring-erp-services-local
+    image: spring-erp-services:latest
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      - fachdienst
+      - idp-server
+      - fachdienst-tool
+    ports:
+      - "3002:3001"
+    volumes:
+      - "/app/credentials:/app/credentials"
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+  # Fachdienst - EXAKT wie in docker-compose.backend.yml
+  fachdienst:
+    hostname: fachdienst
+    #container_name: fachdienst-local
+    image: ghcr.io/odilab/fachdienst/fachdienst
+    depends_on:
+      - idp-server
+    command: bash -c "/app/ref-erx-fd-server --enc-key ./credentials/id_enc/fd_id_enc --enc-cert ./credentials/id_enc/fd_id_enc.cert --sig-key ./credentials/id_sig/fd_id_sig --sig-cert ./credentials/id_sig/fd_id_sig.cert --bnetza file://credentials/files/bnetzavl_konn.xml --token https://idp-server:10000/.well-known/openid-configuration --tsl file://credentials/files/TSL_final.xml"
+    ports:
+      - "3003:3000"
+    volumes:
+      - "/app/credentials:/app/credentials"
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+  # IDP Server - EXAKT wie in docker-compose.backend.yml
+  idp-server:
+    hostname: idp-server
+    container_name: idp-server-local
+    image: ghcr.io/odilab/ipd-server/idp-server
+    entrypoint: ["java","-Dspring.profiles.active=ssl","-jar","/app/idp-server-19.1.0.jar"]
+    ports:
+      - "10001:10000"
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+  # HAPI FHIR Server Services - EXAKT wie in docker-compose.backend.yml
+  hapi-fhir-jpaserver-start:
+    hostname: hapi-fhir-jpaserver-start
+    container_name: hapi-fhir-jpaserver-start
+    image: hapi-fhir-jpaserver:tomcat
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://hapi-fhir-postgres:5432/hapi"
+      SPRING_DATASOURCE_USERNAME: "admin"
+      SPRING_DATASOURCE_PASSWORD: "admin"
+      SPRING_DATASOURCE_DRIVERCLASSNAME: "org.postgresql.Driver"
+      JAVA_TOOL_OPTIONS: "-Xmx2g -Xms1g"
+      HAPI_FHIR_AUTH_DISCOVERY_URL: "https://idp-server:10000/.well-known/openid-configuration"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
+    ports:
+      - "8081:8080"
+    depends_on:
+      - hapi-fhir-postgres
+      - idp-server
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+  # PostgreSQL - EXAKT wie in docker-compose.backend.yml
+  hapi-fhir-postgres:
+    hostname: hapi-fhir-postgres
+    container_name: hapi-fhir-postgres
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=hapi
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+    volumes:
+      - hapi-fhir-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d hapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - backend_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+        window: 120s  
+
+volumes:
+  hapi-fhir-postgres:
+
+networks:
+  backend_network:
+    external: true
+    driver: bridge 

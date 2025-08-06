@@ -10,3 +10,8 @@ target/jacoco.exec
 target/*.original
 .idea
 .git
+.vscode
+.travis.yml
+build-docker-image.sh
+build-docker-image.bat
+README.md
