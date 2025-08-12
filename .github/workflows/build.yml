@@ -54,7 +54,7 @@ jobs:
     - name: SSH and run commands on remote server
       uses: appleboy/ssh-action@master      
       with:
-        host: "${{ env.SERVER_IP }}" # Die zuvor ausgewählte Server-IP
+        host: "${{ vars.SERVER_IP_DEV }}" # Die zuvor ausgewählte Server-IP
         username: root # Der Benutzername für den SSH-Login
         key: "${{ secrets.SSH_PRIVATE_KEY_ERP_DEV }}" # Das private SSH-Schlüssel-Geheimnis
         port: 22 # Optional: Der SSH-Port (Standard ist 22)
@@ -101,10 +101,10 @@ jobs:
         chmod 644 ${{ env.SCRIPTPATH }}/*.pub
         eval $(ssh-agent -s)
         ssh-add ${{ env.SCRIPTPATH }}/id_deploy.key
-        ssh-keyscan "${{ env.SERVER_IP }}" >> ${{ env.SCRIPTPATH }}/known_hosts
+        ssh-keyscan "${{ vars.SERVER_IP_DEV }}" >> ${{ env.SCRIPTPATH }}/known_hosts
         chmod 644 ${{ env.SCRIPTPATH }}/known_hosts
         # Kopieren der aktuellen docker-compose-dev.yml auf den Server
-        scp $COMPOSE_FILE root@"${{ env.SERVER_IP }}":/app/compose-erechnung/docker-compose.yml
+        scp $COMPOSE_FILE root@"${{ vars.SERVER_IP_DEV }}":/app/compose-erechnung/docker-compose.yml
         # Hochfahren der docker container und der restart des nginx
         #ssh root@"${{ env.SERVER_IP }}" "docker compose -f /app/compose-e-rezept/docker-compose.yml up -d; systemctl restart nginx"
         # Lösche unnötige Docker Images
